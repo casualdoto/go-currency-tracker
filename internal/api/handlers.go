@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/casualdoto/go-currency-tracker/internal/currency"
 )
 
 func PingHandler(w http.ResponseWriter, r *http.Request) {
@@ -17,4 +19,15 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func CBRRatesHandler(w http.ResponseWriter, r *http.Request) {
+	rates, err := currency.GetCBRRates()
+	if err != nil {
+		http.Error(w, "Ошибка получения курсов: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rates.Valute)
 }

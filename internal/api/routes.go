@@ -11,6 +11,7 @@ func SetupRoutes() http.Handler {
 
 	r.Get("/ping", PingHandler)
 	r.Get("/info", InfoHandler)
+	r.Get("/rates/cbr", CBRRatesHandler)
 
 	// Тут будут другие маршруты (например, /rates, /metrics...)
 
