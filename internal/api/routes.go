@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/casualdoto/go-currency-tracker/internal/storage"
 )
 
 // Function to get the project root path
@@ -24,6 +26,11 @@ func getProjectRoot() string {
 
 	// Go up two levels (internal/api -> internal -> root)
 	return filepath.Dir(filepath.Dir(dir))
+}
+
+// DatabaseHandler represents a handler that requires database access
+type DatabaseHandler struct {
+	DB *storage.PostgresDB
 }
 
 // SetupRoutes configures and returns an HTTP request router.
@@ -45,9 +52,58 @@ func SetupRoutes() http.Handler {
 	r.Get("/rates/cbr/currency", CBRCurrencyHandler) // Specific currency rate
 
 	// Static OpenAPI documentation
-	r.Get("/api/docs", func(w http.ResponseWriter, r *http.Request) {
-		// Serve HTML page with Swagger UI for documentation
-		html := `
+	r.Get("/api/docs", SwaggerUIHandler)
+	r.Get("/api/openapi", OpenAPIHandler)
+
+	// Add handler for root documentation path
+	r.Get("/api", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/docs", http.StatusFound)
+	})
+
+	return r
+}
+
+// SetupRoutesWithDB configures API routes with database access
+func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
+	r := chi.NewRouter()
+
+	// Middleware
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(CORSMiddleware)
+
+	// Create database handler
+	dbHandler := &DatabaseHandler{DB: db}
+
+	// Basic endpoints
+	r.Get("/ping", PingHandler)
+	r.Get("/info", InfoHandler)
+
+	// CBR rates endpoints
+	r.Get("/rates/cbr", CBRRatesHandler)
+	r.Get("/rates/cbr/currency", CBRCurrencyHandler)
+
+	// Database rates endpoints
+	r.Get("/rates/db", dbHandler.GetStoredRatesHandler)
+	r.Get("/rates/db/currency", dbHandler.GetStoredCurrencyRateHandler)
+	r.Get("/rates/db/dates", dbHandler.GetAvailableDatesHandler)
+
+	// API documentation
+	r.Get("/api/docs", SwaggerUIHandler)
+	r.Get("/api/openapi", OpenAPIHandler)
+	r.Get("/api", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/api/docs", http.StatusFound)
+	})
+
+	return r
+}
+
+// corsMiddleware is defined in handlers.go
+
+// SwaggerUIHandler serves the Swagger UI HTML page
+func SwaggerUIHandler(w http.ResponseWriter, r *http.Request) {
+	// Serve HTML page with Swagger UI for documentation
+	html := `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -82,64 +138,58 @@ func SetupRoutes() http.Handler {
 </body>
 </html>
 `
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, html)
-	})
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, html)
+}
 
-	// Endpoint for getting OpenAPI specification
-	r.Get("/api/openapi", func(w http.ResponseWriter, r *http.Request) {
-		var docsPath string
+// OpenAPIHandler serves the OpenAPI specification
+func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
+	var docsPath string
 
-		// Try to find documentation file in several locations
-		// 1. First check relative path from current working directory
-		workDir, err := os.Getwd()
-		if err == nil {
-			path := filepath.Join(workDir, "api", "openapi.json")
+	// Try to find documentation file in several locations
+	// 1. First check relative path from current working directory
+	workDir, err := os.Getwd()
+	if err == nil {
+		path := filepath.Join(workDir, "api", "openapi.json")
+		if _, err := os.Stat(path); err == nil {
+			docsPath = path
+		}
+	}
+
+	// 2. If not found, try to find relative to project root
+	if docsPath == "" {
+		projectRoot := getProjectRoot()
+		if projectRoot != "" {
+			path := filepath.Join(projectRoot, "api", "openapi.json")
 			if _, err := os.Stat(path); err == nil {
 				docsPath = path
 			}
 		}
+	}
 
-		// 2. If not found, try to find relative to project root
-		if docsPath == "" {
-			projectRoot := getProjectRoot()
-			if projectRoot != "" {
-				path := filepath.Join(projectRoot, "api", "openapi.json")
-				if _, err := os.Stat(path); err == nil {
-					docsPath = path
-				}
+	// 3. If still not found, try to find relative to executable file
+	if docsPath == "" {
+		execPath, err := os.Executable()
+		if err == nil {
+			execDir := filepath.Dir(execPath)
+			path := filepath.Join(execDir, "api", "openapi.json")
+			if _, err := os.Stat(path); err == nil {
+				docsPath = path
 			}
 		}
+	}
 
-		// 3. If still not found, try to find relative to executable file
-		if docsPath == "" {
-			execPath, err := os.Executable()
-			if err == nil {
-				execDir := filepath.Dir(execPath)
-				path := filepath.Join(execDir, "api", "openapi.json")
-				if _, err := os.Stat(path); err == nil {
-					docsPath = path
-				}
-			}
-		}
+	// If file not found in any location
+	if docsPath == "" {
+		http.Error(w, "API documentation not found", http.StatusNotFound)
+		return
+	}
 
-		// If file not found in any location
-		if docsPath == "" {
-			http.Error(w, "API documentation not found", http.StatusNotFound)
-			return
-		}
+	// Set Content-Type header for JSON
+	w.Header().Set("Content-Type", "application/json")
 
-		// Set Content-Type header for JSON
-		w.Header().Set("Content-Type", "application/json")
-
-		// Send file
-		http.ServeFile(w, r, docsPath)
-	})
-
-	// Add handler for root documentation path
-	r.Get("/api", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/api/docs", http.StatusFound)
-	})
-
-	return r
+	// Send file
+	http.ServeFile(w, r, docsPath)
 }
+
+// Database handlers are defined in handlers_db.go
