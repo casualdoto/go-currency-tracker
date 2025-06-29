@@ -1,0 +1,224 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Go Currency Tracker API",
+    "description": "API для получения курсов валют ЦБ РФ",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Go Currency Tracker Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Локальный сервер разработки"
+    }
+  ],
+  "paths": {
+    "/ping": {
+      "get": {
+        "summary": "Проверка работоспособности API",
+        "description": "Используется для проверки доступности API",
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "pong"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/info": {
+      "get": {
+        "summary": "Информация о сервисе",
+        "description": "Возвращает базовую информацию о сервисе",
+        "operationId": "getInfo",
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "example": "Go Currency Tracker"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "OK"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rates/cbr": {
+      "get": {
+        "summary": "Получение всех курсов валют",
+        "description": "Возвращает курсы всех валют ЦБ РФ на указанную дату",
+        "operationId": "getCBRRates",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Дата в формате YYYY-MM-DD (например, 2023-05-15). Если не указана, используется текущая дата.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2023-05-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Valute"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Ошибка получения курсов"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rates/cbr/currency": {
+      "get": {
+        "summary": "Получение курса конкретной валюты",
+        "description": "Возвращает курс указанной валюты ЦБ РФ на указанную дату",
+        "operationId": "getCBRCurrency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Код валюты в формате ISO 4217 (например, USD, EUR)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "USD"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Дата в формате YYYY-MM-DD (например, 2023-05-15). Если не указана, используется текущая дата.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2023-05-15"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Valute"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ошибка в запросе",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Не указан код валюты"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Ошибка получения курса валюты"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Valute": {
+        "type": "object",
+        "properties": {
+          "ID": {
+            "type": "string",
+            "description": "Внутренний идентификатор валюты в API ЦБ РФ",
+            "example": "R01235"
+          },
+          "NumCode": {
+            "type": "string",
+            "description": "Цифровой код валюты",
+            "example": "840"
+          },
+          "CharCode": {
+            "type": "string",
+            "description": "Буквенный код валюты по ISO 4217",
+            "example": "USD"
+          },
+          "Nominal": {
+            "type": "integer",
+            "description": "Номинал (количество единиц валюты)",
+            "example": 1
+          },
+          "Name": {
+            "type": "string",
+            "description": "Название валюты",
+            "example": "Доллар США"
+          },
+          "Value": {
+            "type": "number",
+            "format": "float",
+            "description": "Курс валюты к рублю",
+            "example": 75.4571
+          },
+          "Previous": {
+            "type": "number",
+            "format": "float",
+            "description": "Предыдущее значение курса",
+            "example": 75.2513
+          }
+        }
+      }
+    }
+  }
+}
