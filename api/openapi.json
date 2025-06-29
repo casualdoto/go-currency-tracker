@@ -1,8 +1,8 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.1.1",
   "info": {
     "title": "Go Currency Tracker API",
-    "description": "API для получения курсов валют ЦБ РФ",
+    "description": "API for getting currency rates from the Central Bank of Russia",
     "version": "1.0.0",
     "contact": {
       "name": "Go Currency Tracker Team"
@@ -11,18 +11,18 @@
   "servers": [
     {
       "url": "http://localhost:8080",
-      "description": "Локальный сервер разработки"
+      "description": "Local development server"
     }
   ],
   "paths": {
     "/ping": {
       "get": {
-        "summary": "Проверка работоспособности API",
-        "description": "Используется для проверки доступности API",
+        "summary": "API health check",
+        "description": "Used to check API availability",
         "operationId": "ping",
         "responses": {
           "200": {
-            "description": "Успешный ответ",
+            "description": "Successful response",
             "content": {
               "text/plain": {
                 "schema": {
@@ -37,12 +37,12 @@
     },
     "/info": {
       "get": {
-        "summary": "Информация о сервисе",
-        "description": "Возвращает базовую информацию о сервисе",
+        "summary": "Service information",
+        "description": "Returns basic information about the service",
         "operationId": "getInfo",
         "responses": {
           "200": {
-            "description": "Успешный ответ",
+            "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
@@ -66,14 +66,14 @@
     },
     "/rates/cbr": {
       "get": {
-        "summary": "Получение всех курсов валют",
-        "description": "Возвращает курсы всех валют ЦБ РФ на указанную дату",
+        "summary": "Get all currency rates",
+        "description": "Returns all currency rates from the Central Bank of Russia for the specified date",
         "operationId": "getCBRRates",
         "parameters": [
           {
             "name": "date",
             "in": "query",
-            "description": "Дата в формате YYYY-MM-DD (например, 2023-05-15). Если не указана, используется текущая дата.",
+            "description": "Date in YYYY-MM-DD format (e.g., 2023-05-15). If not specified, current date is used.",
             "required": false,
             "schema": {
               "type": "string",
@@ -84,7 +84,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Успешный ответ",
+            "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
@@ -97,12 +97,12 @@
             }
           },
           "500": {
-            "description": "Внутренняя ошибка сервера",
+            "description": "Internal server error",
             "content": {
               "text/plain": {
                 "schema": {
                   "type": "string",
-                  "example": "Ошибка получения курсов"
+                  "example": "Error getting rates"
                 }
               }
             }
@@ -112,14 +112,14 @@
     },
     "/rates/cbr/currency": {
       "get": {
-        "summary": "Получение курса конкретной валюты",
-        "description": "Возвращает курс указанной валюты ЦБ РФ на указанную дату",
+        "summary": "Get specific currency rate",
+        "description": "Returns the rate of the specified currency from the Central Bank of Russia for the specified date",
         "operationId": "getCBRCurrency",
         "parameters": [
           {
             "name": "code",
             "in": "query",
-            "description": "Код валюты в формате ISO 4217 (например, USD, EUR)",
+            "description": "Currency code in ISO 4217 format (e.g., USD, EUR)",
             "required": true,
             "schema": {
               "type": "string",
@@ -129,7 +129,7 @@
           {
             "name": "date",
             "in": "query",
-            "description": "Дата в формате YYYY-MM-DD (например, 2023-05-15). Если не указана, используется текущая дата.",
+            "description": "Date in YYYY-MM-DD format (e.g., 2023-05-15). If not specified, current date is used.",
             "required": false,
             "schema": {
               "type": "string",
@@ -140,7 +140,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Успешный ответ",
+            "description": "Successful response",
             "content": {
               "application/json": {
                 "schema": {
@@ -150,23 +150,23 @@
             }
           },
           "400": {
-            "description": "Ошибка в запросе",
+            "description": "Bad request",
             "content": {
               "text/plain": {
                 "schema": {
                   "type": "string",
-                  "example": "Не указан код валюты"
+                  "example": "Currency code not specified"
                 }
               }
             }
           },
           "500": {
-            "description": "Внутренняя ошибка сервера",
+            "description": "Internal server error",
             "content": {
               "text/plain": {
                 "schema": {
                   "type": "string",
-                  "example": "Ошибка получения курса валюты"
+                  "example": "Error getting currency rate"
                 }
               }
             }
@@ -182,39 +182,39 @@
         "properties": {
           "ID": {
             "type": "string",
-            "description": "Внутренний идентификатор валюты в API ЦБ РФ",
+            "description": "Internal currency identifier in CBR API",
             "example": "R01235"
           },
           "NumCode": {
             "type": "string",
-            "description": "Цифровой код валюты",
+            "description": "Numeric currency code",
             "example": "840"
           },
           "CharCode": {
             "type": "string",
-            "description": "Буквенный код валюты по ISO 4217",
+            "description": "Alphabetic currency code according to ISO 4217",
             "example": "USD"
           },
           "Nominal": {
             "type": "integer",
-            "description": "Номинал (количество единиц валюты)",
+            "description": "Nominal (number of currency units)",
             "example": 1
           },
           "Name": {
             "type": "string",
-            "description": "Название валюты",
-            "example": "Доллар США"
+            "description": "Currency name",
+            "example": "US Dollar"
           },
           "Value": {
             "type": "number",
             "format": "float",
-            "description": "Курс валюты к рублю",
+            "description": "Currency rate to Russian ruble",
             "example": 75.4571
           },
           "Previous": {
             "type": "number",
             "format": "float",
-            "description": "Предыдущее значение курса",
+            "description": "Previous currency rate value",
             "example": 75.2513
           }
         }

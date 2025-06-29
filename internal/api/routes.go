@@ -11,21 +11,23 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Функция для получения пути к корню проекта
+// Function to get the project root path
 func getProjectRoot() string {
-	// Пытаемся определить директорию проекта
+	// Try to determine the project directory
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		return ""
 	}
 
-	// Получаем директорию текущего файла
+	// Get the directory of the current file
 	dir := filepath.Dir(filename)
 
-	// Поднимаемся на два уровня вверх (internal/api -> internal -> root)
+	// Go up two levels (internal/api -> internal -> root)
 	return filepath.Dir(filepath.Dir(dir))
 }
 
+// SetupRoutes configures and returns an HTTP request router.
+// Registers all API handlers and middleware.
 func SetupRoutes() http.Handler {
 	r := chi.NewRouter()
 
@@ -34,17 +36,17 @@ func SetupRoutes() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(CORSMiddleware)
 
-	// Базовые маршруты
+	// Basic routes
 	r.Get("/ping", PingHandler)
 	r.Get("/info", InfoHandler)
 
-	// Маршруты для работы с курсами валют
-	r.Get("/rates/cbr", CBRRatesHandler)             // Все курсы (с опциональным параметром даты)
-	r.Get("/rates/cbr/currency", CBRCurrencyHandler) // Курс конкретной валюты
+	// Routes for currency rates
+	r.Get("/rates/cbr", CBRRatesHandler)             // All rates (with optional date parameter)
+	r.Get("/rates/cbr/currency", CBRCurrencyHandler) // Specific currency rate
 
-	// Статическая документация OpenAPI
+	// Static OpenAPI documentation
 	r.Get("/api/docs", func(w http.ResponseWriter, r *http.Request) {
-		// Отдаем HTML страницу с Swagger UI для просмотра документации
+		// Serve HTML page with Swagger UI for documentation
 		html := `
 <!DOCTYPE html>
 <html lang="en">
@@ -84,12 +86,12 @@ func SetupRoutes() http.Handler {
 		fmt.Fprint(w, html)
 	})
 
-	// Эндпоинт для получения OpenAPI спецификации
+	// Endpoint for getting OpenAPI specification
 	r.Get("/api/openapi", func(w http.ResponseWriter, r *http.Request) {
 		var docsPath string
 
-		// Пытаемся найти файл документации в нескольких местах
-		// 1. Сначала проверяем относительный путь от текущего рабочего каталога
+		// Try to find documentation file in several locations
+		// 1. First check relative path from current working directory
 		workDir, err := os.Getwd()
 		if err == nil {
 			path := filepath.Join(workDir, "api", "openapi.json")
@@ -98,7 +100,7 @@ func SetupRoutes() http.Handler {
 			}
 		}
 
-		// 2. Если не нашли, пробуем найти относительно корня проекта
+		// 2. If not found, try to find relative to project root
 		if docsPath == "" {
 			projectRoot := getProjectRoot()
 			if projectRoot != "" {
@@ -109,7 +111,7 @@ func SetupRoutes() http.Handler {
 			}
 		}
 
-		// 3. Если все равно не нашли, пробуем найти относительно исполняемого файла
+		// 3. If still not found, try to find relative to executable file
 		if docsPath == "" {
 			execPath, err := os.Executable()
 			if err == nil {
@@ -121,20 +123,20 @@ func SetupRoutes() http.Handler {
 			}
 		}
 
-		// Если файл не найден ни в одном из мест
+		// If file not found in any location
 		if docsPath == "" {
-			http.Error(w, "Документация API не найдена", http.StatusNotFound)
+			http.Error(w, "API documentation not found", http.StatusNotFound)
 			return
 		}
 
-		// Устанавливаем заголовок Content-Type для JSON
+		// Set Content-Type header for JSON
 		w.Header().Set("Content-Type", "application/json")
 
-		// Отправляем файл
+		// Send file
 		http.ServeFile(w, r, docsPath)
 	})
 
-	// Добавляем обработчик для корневого пути документации
+	// Add handler for root documentation path
 	r.Get("/api", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/docs", http.StatusFound)
 	})

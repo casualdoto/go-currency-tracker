@@ -1,96 +1,144 @@
+// Package api provides HTTP request handlers and API route setup.
 package api
 
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/casualdoto/go-currency-tracker/internal/currency"
 )
 
-// Middleware для добавления CORS заголовков
+// APIResponse represents standard API response structure
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
+// CORSMiddleware adds CORS headers to support cross-domain requests.
+// Allows requests from any origin and supports various HTTP methods.
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Добавляем CORS заголовки
+		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Обрабатываем preflight запросы
+		// Handle preflight requests
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		// Передаем запрос следующему обработчику
+		// Pass request to the next handler
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Вспомогательная функция для отправки JSON ответа
-func sendJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "Ошибка сериализации JSON", http.StatusInternalServerError)
-	}
-}
-
-// Вспомогательная функция для отправки ошибки
-func sendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
-}
-
+// PingHandler handles requests to check service availability.
+// Returns a simple "pong" response to confirm API is working.
 func PingHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("pong"))
+	response := APIResponse{
+		Success: true,
+		Data:    "pong",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-// Пример: возврат базовой информации о сервисе
+// InfoHandler returns information about the service.
+// Includes name, version, and service start time.
 func InfoHandler(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]string{
-		"service": "Go Currency Tracker",
-		"status":  "OK",
+	info := map[string]string{
+		"name":        "Go Currency Tracker API",
+		"version":     "1.0.0",
+		"description": "API for tracking currency rates",
+		"timestamp":   time.Now().Format(time.RFC3339),
 	}
-	sendJSONResponse(w, resp, http.StatusOK)
+
+	response := APIResponse{
+		Success: true,
+		Data:    info,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-// Обработчик для получения всех курсов валют
+// CBRRatesHandler handles requests for getting CBR currency rates.
+// Supports optional query parameter date in DD/MM/YYYY format.
+// If date parameter is not specified, returns rates for the current date.
 func CBRRatesHandler(w http.ResponseWriter, r *http.Request) {
-	// Получаем параметр даты из запроса
+	// Get date parameter from request (optional)
 	date := r.URL.Query().Get("date")
 
-	var rates *currency.DailyRates
-	var err error
-
-	// Получаем курсы за указанную дату или текущую, если дата не указана
-	rates, err = currency.GetCBRRatesByDate(date)
+	// Get currency rates from CBR
+	rates, err := currency.GetCBRRatesByDate(date)
 	if err != nil {
-		sendErrorResponse(w, "Ошибка получения курсов: "+err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
 		return
 	}
 
-	sendJSONResponse(w, rates.Valute, http.StatusOK)
+	// Form successful response
+	response := APIResponse{
+		Success: true,
+		Data:    rates.Valute,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-// Обработчик для получения курса конкретной валюты
+// CBRCurrencyHandler handles requests for getting a specific CBR currency rate.
+// Requires query parameter code (currency code, e.g. USD).
+// Supports optional query parameter date in DD/MM/YYYY format.
+// If date parameter is not specified, returns rate for the current date.
 func CBRCurrencyHandler(w http.ResponseWriter, r *http.Request) {
-	// Получаем код валюты из URL
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		sendErrorResponse(w, "Не указан код валюты", http.StatusBadRequest)
+	// Get currency code from request
+	currencyCode := r.URL.Query().Get("code")
+	if currencyCode == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Currency code not specified (parameter code)",
+		})
 		return
 	}
 
-	// Получаем параметр даты из запроса
+	// Get date parameter from request (optional)
 	date := r.URL.Query().Get("date")
 
-	// Получаем курс валюты
-	valute, err := currency.GetCurrencyRate(code, date)
+	// Get currency rate
+	rate, err := currency.GetCurrencyRate(currencyCode, date)
 	if err != nil {
-		sendErrorResponse(w, "Ошибка получения курса валюты: "+err.Error(), http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if err.Error() == "currency with code "+currencyCode+" not found" {
+			statusCode = http.StatusNotFound
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
 		return
 	}
 
-	sendJSONResponse(w, valute, http.StatusOK)
+	// Form successful response
+	response := APIResponse{
+		Success: true,
+		Data:    rate,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

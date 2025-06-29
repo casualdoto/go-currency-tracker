@@ -1,35 +1,35 @@
 # Go Currency Tracker
 
-Сервис для отслеживания курсов валют ЦБ РФ с REST API.
+A service for tracking currency exchange rates from the Central Bank of Russia (CBR) with REST API.
 
-## Возможности
+## Features
 
-- Получение курсов всех валют ЦБ РФ
-- Получение курса конкретной валюты
-- Выбор даты для получения исторических курсов
-- OpenAPI документация
+- Get all currency rates from CBR
+- Get specific currency rate by code
+- Select date for historical rates
+- OpenAPI documentation
 
-## Установка и запуск
+## Installation and Running
 
-### Требования
+### Requirements
 
 - Go 1.21+
 
-### Сборка и запуск
+### Building and Running
 
 ```bash
-# Клонирование репозитория
+# Clone repository
 git clone https://github.com/casualdoto/go-currency-tracker.git
 cd go-currency-tracker
 
-# Сборка проекта
+# Build project
 go build -o currency-tracker ./cmd/server
 
-# Запуск сервера
+# Run server
 ./currency-tracker
 ```
 
-На Windows:
+On Windows:
 
 ```cmd
 go build -o currency-tracker.exe ./cmd/server
@@ -38,35 +38,60 @@ currency-tracker.exe
 
 ## API
 
-Сервер запускается на порту 8080 по умолчанию.
+Server starts on port 8080 by default.
 
-### Основные эндпоинты
+### Main endpoints
 
-- `GET /ping` - проверка работоспособности API
-- `GET /info` - информация о сервисе
-- `GET /rates/cbr` - получение всех курсов валют
-- `GET /rates/cbr?date=YYYY-MM-DD` - получение всех курсов валют на указанную дату
-- `GET /rates/cbr/currency?code=USD` - получение курса доллара США
-- `GET /rates/cbr/currency?code=EUR&date=2023-05-15` - получение курса евро на 15 мая 2023 года
-- `GET /api/docs` - OpenAPI документация
+- `GET /ping` - API health check
+- `GET /info` - Service information
+- `GET /rates/cbr` - Get all currency rates
+- `GET /rates/cbr?date=YYYY-MM-DD` - Get all currency rates for specific date
+- `GET /rates/cbr/currency?code=USD` - Get USD rate
+- `GET /rates/cbr/currency?code=EUR&date=2023-05-15` - Get EUR rate for May 15, 2023
+- `GET /api/docs` - OpenAPI documentation
 
-### Примеры запросов
+### Request examples
 
 ```bash
-# Получение всех курсов валют на текущую дату
+# Get all currency rates for current date
 curl http://localhost:8080/rates/cbr
 
-# Получение курса доллара США на текущую дату
+# Get USD rate for current date
 curl http://localhost:8080/rates/cbr/currency?code=USD
 
-# Получение курса евро на конкретную дату
+# Get EUR rate for specific date
 curl http://localhost:8080/rates/cbr/currency?code=EUR&date=2023-05-15
 ```
 
-## Документация API
+## Testing
 
-OpenAPI документация доступна по адресу `/api/docs` после запуска сервера.
+The project includes comprehensive tests for both API handlers and currency rate functions:
 
-## Лицензия
+### Running Tests
+
+Run all tests:
+```bash
+go test ./...
+```
+
+Run specific package tests:
+```bash
+go test ./internal/api -v
+go test ./internal/currency -v
+```
+
+### Test Coverage
+
+The tests cover:
+- API handlers with mock currency providers
+- Currency rate functions with mock HTTP servers
+- CORS middleware
+- Error handling scenarios
+
+## API Documentation
+
+OpenAPI documentation is available at `/api/docs` after starting the server.
+
+## License
 
 MIT
