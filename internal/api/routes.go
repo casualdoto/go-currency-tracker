@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -26,11 +27,6 @@ func getProjectRoot() string {
 
 	// Go up two levels (internal/api -> internal -> root)
 	return filepath.Dir(filepath.Dir(dir))
-}
-
-// DatabaseHandler represents a handler that requires database access
-type DatabaseHandler struct {
-	DB *storage.PostgresDB
 }
 
 // SetupRoutes configures and returns an HTTP request router.
@@ -72,8 +68,13 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(CORSMiddleware)
 
-	// Create database handler
-	dbHandler := &DatabaseHandler{DB: db}
+	// Add database to context
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), "db", db)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
 
 	// Basic endpoints
 	r.Get("/ping", PingHandler)
@@ -82,11 +83,6 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	// CBR rates endpoints
 	r.Get("/rates/cbr", CBRRatesHandler)
 	r.Get("/rates/cbr/currency", CBRCurrencyHandler)
-
-	// Database rates endpoints
-	r.Get("/rates/db", dbHandler.GetStoredRatesHandler)
-	r.Get("/rates/db/currency", dbHandler.GetStoredCurrencyRateHandler)
-	r.Get("/rates/db/dates", dbHandler.GetAvailableDatesHandler)
 
 	// API documentation
 	r.Get("/api/docs", SwaggerUIHandler)
@@ -191,5 +187,3 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 	// Send file
 	http.ServeFile(w, r, docsPath)
 }
-
-// Database handlers are defined in handlers_db.go

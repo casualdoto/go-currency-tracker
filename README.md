@@ -29,17 +29,10 @@ cd go-currency-tracker
 docker-compose up -d postgres
 
 # Build project
-go build -o currency-tracker ./cmd/server
+go build -o currency-tracker.exe ./cmd/server
 
 # Run server
 ./currency-tracker
-```
-
-On Windows:
-
-```cmd
-go build -o currency-tracker.exe ./cmd/server
-currency-tracker.exe
 ```
 
 ## API

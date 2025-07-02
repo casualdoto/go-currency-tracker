@@ -3,10 +3,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/casualdoto/go-currency-tracker/internal/currency"
+	"github.com/casualdoto/go-currency-tracker/internal/storage"
 )
 
 // APIResponse represents standard API response structure
@@ -72,10 +74,54 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 // If date parameter is not specified, returns rates for the current date.
 func CBRRatesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get date parameter from request (optional)
-	date := r.URL.Query().Get("date")
+	dateStr := r.URL.Query().Get("date")
+
+	var date time.Time
+	var err error
+
+	// Parse date or use current date
+	if dateStr == "" {
+		date = time.Now().Truncate(24 * time.Hour)
+	} else {
+		// Parse date from string
+		date, err = time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(APIResponse{
+				Success: false,
+				Error:   "Invalid date format. Use YYYY-MM-DD",
+			})
+			return
+		}
+	}
+
+	// Check if we have a database connection in the context
+	db, ok := r.Context().Value("db").(*storage.PostgresDB)
+	if ok && db != nil {
+		// Try to get rates from database first
+		rates, err := db.GetCurrencyRatesByDate(date)
+		if err == nil && len(rates) > 0 {
+			// Convert database rates to response format
+			response := APIResponse{
+				Success: true,
+				Data:    formatDBRatesToValuteMap(rates),
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// If we don't have data in DB or there was an error, get from CBR API
+	cbrDateStr := ""
+	if dateStr != "" {
+		cbrDateStr = dateStr
+	}
 
 	// Get currency rates from CBR
-	rates, err := currency.GetCBRRatesByDate(date)
+	rates, err := currency.GetCBRRatesByDate(cbrDateStr)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -86,6 +132,30 @@ func CBRRatesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If we have a database connection, save the rates
+	if ok && db != nil {
+		// Convert API rates to database format
+		var dbRates []storage.CurrencyRate
+		for code, valute := range rates.Valute {
+			dbRates = append(dbRates, storage.CurrencyRate{
+				Date:         date,
+				CurrencyCode: code,
+				CurrencyName: valute.Name,
+				Nominal:      valute.Nominal,
+				Value:        valute.Value,
+				Previous:     valute.Previous,
+			})
+		}
+
+		// Save to database in background to not block the response
+		go func(dbRates []storage.CurrencyRate) {
+			if err := db.SaveCurrencyRates(dbRates); err != nil {
+				// Just log the error, don't affect the response
+				fmt.Printf("Failed to save currency rates to database: %v\n", err)
+			}
+		}(dbRates)
+	}
+
 	// Form successful response
 	response := APIResponse{
 		Success: true,
@@ -94,6 +164,23 @@ func CBRRatesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// Helper function to convert database rates to the same format as CBR API
+func formatDBRatesToValuteMap(rates []storage.CurrencyRate) map[string]currency.Valute {
+	valute := make(map[string]currency.Valute)
+	for _, rate := range rates {
+		valute[rate.CurrencyCode] = currency.Valute{
+			ID:       rate.CurrencyCode,
+			NumCode:  "",
+			CharCode: rate.CurrencyCode,
+			Nominal:  rate.Nominal,
+			Name:     rate.CurrencyName,
+			Value:    rate.Value,
+			Previous: rate.Previous,
+		}
+	}
+	return valute
 }
 
 // CBRCurrencyHandler handles requests for getting a specific CBR currency rate.
@@ -114,10 +201,64 @@ func CBRCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get date parameter from request (optional)
-	date := r.URL.Query().Get("date")
+	dateStr := r.URL.Query().Get("date")
 
-	// Get currency rate
-	rate, err := currency.GetCurrencyRate(currencyCode, date)
+	var date time.Time
+	var err error
+
+	// Parse date or use current date
+	if dateStr == "" {
+		date = time.Now().Truncate(24 * time.Hour)
+	} else {
+		// Parse date from string
+		date, err = time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(APIResponse{
+				Success: false,
+				Error:   "Invalid date format. Use YYYY-MM-DD",
+			})
+			return
+		}
+	}
+
+	// Check if we have a database connection in the context
+	db, ok := r.Context().Value("db").(*storage.PostgresDB)
+	if ok && db != nil {
+		// Try to get rate from database first
+		rate, err := db.GetCurrencyRate(currencyCode, date)
+		if err == nil {
+			// Convert database rate to response format
+			valuteRate := currency.Valute{
+				ID:       rate.CurrencyCode,
+				NumCode:  "",
+				CharCode: rate.CurrencyCode,
+				Nominal:  rate.Nominal,
+				Name:     rate.CurrencyName,
+				Value:    rate.Value,
+				Previous: rate.Previous,
+			}
+
+			response := APIResponse{
+				Success: true,
+				Data:    valuteRate,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// If we don't have data in DB or there was an error, get from CBR API
+	cbrDateStr := ""
+	if dateStr != "" {
+		cbrDateStr = dateStr
+	}
+
+	// Get currency rate from CBR API
+	rate, err := currency.GetCurrencyRate(currencyCode, cbrDateStr)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err.Error() == "currency with code "+currencyCode+" not found" {
@@ -131,6 +272,27 @@ func CBRCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 			Error:   err.Error(),
 		})
 		return
+	}
+
+	// If we have a database connection, save the rate
+	if ok && db != nil {
+		// Create a database rate record
+		dbRate := storage.CurrencyRate{
+			Date:         date,
+			CurrencyCode: rate.CharCode,
+			CurrencyName: rate.Name,
+			Nominal:      rate.Nominal,
+			Value:        rate.Value,
+			Previous:     rate.Previous,
+		}
+
+		// Save to database in background to not block the response
+		go func(dbRate storage.CurrencyRate) {
+			if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+				// Just log the error, don't affect the response
+				fmt.Printf("Failed to save currency rate to database: %v\n", err)
+			}
+		}(dbRate)
 	}
 
 	// Form successful response

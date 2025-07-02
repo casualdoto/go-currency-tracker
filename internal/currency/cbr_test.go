@@ -25,7 +25,7 @@ func setupMockCBRServer() *httptest.Server {
 						"NumCode": "840",
 						"CharCode": "USD",
 						"Nominal": 1,
-						"Name": "US Dollar",
+						"Name": "Доллар США",
 						"Value": 87.0341,
 						"Previous": 87.1992
 					},
@@ -34,7 +34,7 @@ func setupMockCBRServer() *httptest.Server {
 						"NumCode": "978",
 						"CharCode": "EUR",
 						"Nominal": 1,
-						"Name": "Euro",
+						"Name": "Евро",
 						"Value": 94.7092,
 						"Previous": 95.0489
 					}
@@ -58,7 +58,7 @@ func setupMockCBRServer() *httptest.Server {
 						"NumCode": "840",
 						"CharCode": "USD",
 						"Nominal": 1,
-						"Name": "US Dollar",
+						"Name": "Доллар США",
 						"Value": 85.0504,
 						"Previous": 87.3332
 					},
@@ -67,7 +67,7 @@ func setupMockCBRServer() *httptest.Server {
 						"NumCode": "978",
 						"CharCode": "EUR",
 						"Nominal": 1,
-						"Name": "Euro",
+						"Name": "Евро",
 						"Value": 93.1373,
 						"Previous": 95.2346
 					}
@@ -167,8 +167,8 @@ func TestGetCurrencyRate(t *testing.T) {
 	if usdRate.CharCode != "USD" {
 		t.Errorf("Expected currency code USD, got %s", usdRate.CharCode)
 	}
-	if usdRate.Name != "US Dollar" {
-		t.Errorf("Expected name 'US Dollar', got %s", usdRate.Name)
+	if usdRate.Name != "Доллар США" {
+		t.Errorf("Expected name 'Доллар США', got %s", usdRate.Name)
 	}
 
 	// Run test for non-existent currency

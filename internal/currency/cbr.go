@@ -70,18 +70,7 @@ func GetCBRRatesByDate(date string) (*DailyRates, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&rates); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-
-	// Translate currency names to English for consistency with tests
-	for code, valute := range rates.Valute {
-		if code == "USD" {
-			valute.Name = "US Dollar"
-			rates.Valute[code] = valute
-		} else if code == "EUR" {
-			valute.Name = "Euro"
-			rates.Valute[code] = valute
-		}
-	}
-
+	
 	return &rates, nil
 }
 
