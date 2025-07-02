@@ -150,7 +150,7 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. First check relative path from current working directory
 	workDir, err := os.Getwd()
 	if err == nil {
-		path := filepath.Join(workDir, "api", "openapi.json")
+		path := filepath.Join(workDir, "openapi", "openapi.json")
 		if _, err := os.Stat(path); err == nil {
 			docsPath = path
 		}
@@ -160,7 +160,7 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 	if docsPath == "" {
 		projectRoot := getProjectRoot()
 		if projectRoot != "" {
-			path := filepath.Join(projectRoot, "api", "openapi.json")
+			path := filepath.Join(projectRoot, "openapi", "openapi.json")
 			if _, err := os.Stat(path); err == nil {
 				docsPath = path
 			}
@@ -172,7 +172,7 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 		execPath, err := os.Executable()
 		if err == nil {
 			execDir := filepath.Dir(execPath)
-			path := filepath.Join(execDir, "api", "openapi.json")
+			path := filepath.Join(execDir, "openapi", "openapi.json")
 			if _, err := os.Stat(path); err == nil {
 				docsPath = path
 			}
