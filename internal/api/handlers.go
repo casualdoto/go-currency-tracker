@@ -275,25 +275,49 @@ func CBRCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If we have a database connection, save the rate
+	// If we have a database connection, save all rates for this day
 	if ok && db != nil {
-		// Create a database rate record
-		dbRate := storage.CurrencyRate{
-			Date:         date,
-			CurrencyCode: rate.CharCode,
-			CurrencyName: rate.Name,
-			Nominal:      rate.Nominal,
-			Value:        rate.Value,
-			Previous:     rate.Previous,
-		}
-
-		// Save to database in background to not block the response
-		go func(dbRate storage.CurrencyRate) {
-			if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
-				// Just log the error, don't affect the response
-				fmt.Printf("Failed to save currency rate to database: %v\n", err)
+		// Get all rates for this date to save them all at once
+		rates, err := currency.GetCBRRatesByDate(cbrDateStr)
+		if err == nil {
+			// Convert API rates to database format
+			var dbRates []storage.CurrencyRate
+			for code, valute := range rates.Valute {
+				dbRates = append(dbRates, storage.CurrencyRate{
+					Date:         date,
+					CurrencyCode: code,
+					CurrencyName: valute.Name,
+					Nominal:      valute.Nominal,
+					Value:        valute.Value,
+					Previous:     valute.Previous,
+				})
 			}
-		}(dbRate)
+
+			// Save to database in background to not block the response
+			go func(dbRates []storage.CurrencyRate) {
+				if err := db.SaveCurrencyRates(dbRates); err != nil {
+					// Just log the error, don't affect the response
+					fmt.Printf("Failed to save currency rates to database: %v\n", err)
+				}
+			}(dbRates)
+		} else {
+			// If we couldn't get all rates, at least save this one
+			dbRate := storage.CurrencyRate{
+				Date:         date,
+				CurrencyCode: rate.CharCode,
+				CurrencyName: rate.Name,
+				Nominal:      rate.Nominal,
+				Value:        rate.Value,
+				Previous:     rate.Previous,
+			}
+
+			// Save to database in background
+			go func(dbRate storage.CurrencyRate) {
+				if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+					fmt.Printf("Failed to save currency rate to database: %v\n", err)
+				}
+			}(dbRate)
+		}
 	}
 
 	// Form successful response
@@ -393,21 +417,44 @@ func GetCurrencyHistoryHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Save to DB in background if we have a connection
+			// Save all rates for this day to DB if we have a connection
 			if ok && db != nil {
-				go func(date time.Time, rate *currency.Valute) {
-					dbRate := storage.CurrencyRate{
-						Date:         date,
-						CurrencyCode: rate.CharCode,
-						CurrencyName: rate.Name,
-						Nominal:      rate.Nominal,
-						Value:        rate.Value,
-						Previous:     rate.Previous,
+				go func(dateStr string, date time.Time, currentRate *currency.Valute) {
+					// Get all rates for this date
+					rates, err := currency.GetCBRRatesByDate(dateStr)
+					if err == nil {
+						// Convert API rates to database format
+						var dbRates []storage.CurrencyRate
+						for code, valute := range rates.Valute {
+							dbRates = append(dbRates, storage.CurrencyRate{
+								Date:         date,
+								CurrencyCode: code,
+								CurrencyName: valute.Name,
+								Nominal:      valute.Nominal,
+								Value:        valute.Value,
+								Previous:     valute.Previous,
+							})
+						}
+
+						// Save to database
+						if err := db.SaveCurrencyRates(dbRates); err != nil {
+							fmt.Printf("Failed to save currency rates to database: %v\n", err)
+						}
+					} else {
+						// If we couldn't get all rates, at least save this one
+						dbRate := storage.CurrencyRate{
+							Date:         date,
+							CurrencyCode: currentRate.CharCode,
+							CurrencyName: currentRate.Name,
+							Nominal:      currentRate.Nominal,
+							Value:        currentRate.Value,
+							Previous:     currentRate.Previous,
+						}
+						if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+							fmt.Printf("Failed to save currency rate to database: %v\n", err)
+						}
 					}
-					if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
-						fmt.Printf("Failed to save currency rate to database: %v\n", err)
-					}
-				}(date, rate)
+				}(dateStr, date, rate)
 			}
 		}
 
@@ -420,6 +467,183 @@ func GetCurrencyHistoryHandler(w http.ResponseWriter, r *http.Request) {
 			"value":    rate.Value,
 			"previous": rate.Previous,
 		})
+	}
+
+	// Form successful response
+	response := APIResponse{
+		Success: true,
+		Data:    history,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetCurrencyHistoryByDateRangeHandler handles requests for getting historical currency rates by date range.
+// Requires query parameter code (currency code, e.g. USD).
+// Requires query parameters start_date and end_date in YYYY-MM-DD format.
+func GetCurrencyHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request) {
+	// Get currency code from request
+	currencyCode := r.URL.Query().Get("code")
+	if currencyCode == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Currency code not specified (parameter code)",
+		})
+		return
+	}
+
+	// Get date parameters from request
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	if startDateStr == "" || endDateStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Both start_date and end_date parameters are required (format: YYYY-MM-DD)",
+		})
+		return
+	}
+
+	// Parse dates
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Invalid start_date format. Use YYYY-MM-DD",
+		})
+		return
+	}
+
+	endDate, err := time.Parse("2006-01-02", endDateStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Invalid end_date format. Use YYYY-MM-DD",
+		})
+		return
+	}
+
+	// Validate date range
+	if startDate.After(endDate) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "start_date must be before or equal to end_date",
+		})
+		return
+	}
+
+	// Limit range to 365 days
+	if endDate.Sub(startDate) > 365*24*time.Hour {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Date range cannot exceed 365 days",
+		})
+		return
+	}
+
+	// Check if we have a database connection in the context
+	db, ok := r.Context().Value("db").(*storage.PostgresDB)
+	if !ok || db == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Database connection not available",
+		})
+		return
+	}
+
+	// Get rates from database for the date range
+	dbRates, err := db.GetCurrencyRatesByDateRange(currencyCode, startDate, endDate)
+
+	// Array to store historical rates
+	history := []map[string]interface{}{}
+
+	// If we have data from DB, use it
+	if err == nil && len(dbRates) > 0 {
+		for _, dbRate := range dbRates {
+			history = append(history, map[string]interface{}{
+				"date":     dbRate.Date.Format("2006-01-02"),
+				"code":     dbRate.CurrencyCode,
+				"name":     dbRate.CurrencyName,
+				"nominal":  dbRate.Nominal,
+				"value":    dbRate.Value,
+				"previous": dbRate.Previous,
+			})
+		}
+	} else {
+		// If no data in DB or there was an error, get from CBR API
+		// We'll iterate through each date in the range
+		for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+			dateStr := d.Format("2006-01-02")
+			rate, err := currency.GetCurrencyRate(currencyCode, dateStr)
+
+			if err != nil {
+				// Skip this date if there's an error (might be weekend/holiday)
+				continue
+			}
+
+			// Add rate to history
+			history = append(history, map[string]interface{}{
+				"date":     dateStr,
+				"code":     rate.CharCode,
+				"name":     rate.Name,
+				"nominal":  rate.Nominal,
+				"value":    rate.Value,
+				"previous": rate.Previous,
+			})
+
+			// Save all rates for this day to DB
+			go func(dateStr string, date time.Time, currentRate *currency.Valute) {
+				// Get all rates for this date
+				rates, err := currency.GetCBRRatesByDate(dateStr)
+				if err == nil {
+					// Convert API rates to database format
+					var dbRates []storage.CurrencyRate
+					for code, valute := range rates.Valute {
+						dbRates = append(dbRates, storage.CurrencyRate{
+							Date:         date,
+							CurrencyCode: code,
+							CurrencyName: valute.Name,
+							Nominal:      valute.Nominal,
+							Value:        valute.Value,
+							Previous:     valute.Previous,
+						})
+					}
+
+					// Save to database
+					if err := db.SaveCurrencyRates(dbRates); err != nil {
+						fmt.Printf("Failed to save currency rates to database: %v\n", err)
+					}
+				} else {
+					// If we couldn't get all rates, at least save this one
+					dbRate := storage.CurrencyRate{
+						Date:         date,
+						CurrencyCode: currentRate.CharCode,
+						CurrencyName: currentRate.Name,
+						Nominal:      currentRate.Nominal,
+						Value:        currentRate.Value,
+						Previous:     currentRate.Previous,
+					}
+					if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+						fmt.Printf("Failed to save currency rate to database: %v\n", err)
+					}
+				}
+			}(dateStr, d, rate)
+		}
 	}
 
 	// Form successful response

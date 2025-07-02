@@ -84,6 +84,7 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	r.Get("/rates/cbr", CBRRatesHandler)
 	r.Get("/rates/cbr/currency", CBRCurrencyHandler)
 	r.Get("/rates/cbr/history", GetCurrencyHistoryHandler)
+	r.Get("/rates/cbr/history/range", GetCurrencyHistoryByDateRangeHandler)
 
 	// API documentation
 	r.Get("/api/docs", SwaggerUIHandler)

@@ -230,3 +230,41 @@ func (p *PostgresDB) GetAvailableDates() ([]time.Time, error) {
 
 	return dates, nil
 }
+
+// GetCurrencyRatesByDateRange retrieves currency rates for a specific currency within a date range
+func (p *PostgresDB) GetCurrencyRatesByDateRange(code string, startDate, endDate time.Time) ([]CurrencyRate, error) {
+	rows, err := p.db.Query(`
+		SELECT id, date, currency_code, currency_name, nominal, value, previous, created_at
+		FROM currency_rates
+		WHERE currency_code = $1 AND date >= $2 AND date <= $3
+		ORDER BY date DESC
+	`, code, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query currency rates: %w", err)
+	}
+	defer rows.Close()
+
+	var rates []CurrencyRate
+	for rows.Next() {
+		var rate CurrencyRate
+		if err := rows.Scan(
+			&rate.ID,
+			&rate.Date,
+			&rate.CurrencyCode,
+			&rate.CurrencyName,
+			&rate.Nominal,
+			&rate.Value,
+			&rate.Previous,
+			&rate.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan currency rate: %w", err)
+		}
+		rates = append(rates, rate)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over currency rates: %w", err)
+	}
+
+	return rates, nil
+}

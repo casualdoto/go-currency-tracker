@@ -237,36 +237,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "date": {
-                            "type": "string",
-                            "format": "date",
-                            "example": "2023-05-15"
-                          },
-                          "code": {
-                            "type": "string",
-                            "example": "USD"
-                          },
-                          "name": {
-                            "type": "string",
-                            "example": "US Dollar"
-                          },
-                          "nominal": {
-                            "type": "integer",
-                            "example": 1
-                          },
-                          "value": {
-                            "type": "number",
-                            "format": "float",
-                            "example": 75.4571
-                          },
-                          "previous": {
-                            "type": "number",
-                            "format": "float",
-                            "example": 75.2513
-                          }
-                        }
+                        "$ref": "#/components/schemas/HistoricalRate"
                       }
                     }
                   }
@@ -307,7 +278,112 @@
                     },
                     "error": {
                       "type": "string",
-                      "example": "Error getting historical data"
+                      "example": "Error getting historical rates"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rates/cbr/history/range": {
+      "get": {
+        "summary": "Get historical currency rates by date range",
+        "description": "Returns historical rates for the specified currency within a custom date range",
+        "operationId": "getCurrencyHistoryByDateRange",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Currency code in ISO 4217 format (e.g., USD, EUR)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "USD"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date in YYYY-MM-DD format",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2023-01-01"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date in YYYY-MM-DD format (must be after start_date and within 365 days)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2023-01-31"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HistoricalRate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Invalid date format or range"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Error getting historical rates"
                     }
                   }
                 }
@@ -358,6 +434,38 @@
             "type": "number",
             "format": "float",
             "description": "Previous currency rate value",
+            "example": 75.2513
+          }
+        }
+      },
+      "HistoricalRate": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2023-05-15"
+          },
+          "code": {
+            "type": "string",
+            "example": "USD"
+          },
+          "name": {
+            "type": "string",
+            "example": "US Dollar"
+          },
+          "nominal": {
+            "type": "integer",
+            "example": 1
+          },
+          "value": {
+            "type": "number",
+            "format": "float",
+            "example": 75.4571
+          },
+          "previous": {
+            "type": "number",
+            "format": "float",
             "example": 75.2513
           }
         }
