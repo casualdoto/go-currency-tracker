@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Currency Rate Analysis</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">Currency Rate Analysis</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        Analysis Parameters
+                    </div>
+                    <div class="card-body">
+                        <form id="currency-form">
+                            <div class="mb-3">
+                                <label for="currency-select" class="form-label">Select Currency:</label>
+                                <select class="form-select" id="currency-select" required>
+                                    <option value="" selected disabled>Loading currencies...</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="period-select" class="form-label">Analysis Period:</label>
+                                <select class="form-select" id="period-select" required>
+                                    <option value="7">1 Week</option>
+                                    <option value="14">2 Weeks</option>
+                                    <option value="30">1 Month</option>
+                                    <option value="180">6 Months</option>
+                                    <option value="365">1 Year</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">Analyze</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Metrics
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h5>Average Value</h5>
+                                    <p id="metric-avg" class="metric-value">-</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h5>Standard Deviation</h5>
+                                    <p id="metric-std" class="metric-value">-</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h5>Minimum Value</h5>
+                                    <p id="metric-min" class="metric-value">-</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h5>Maximum Value</h5>
+                                    <p id="metric-max" class="metric-value">-</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h5>Volatility (%)</h5>
+                                    <p id="metric-volatility" class="metric-value">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        Rate Change Chart
+                    </div>
+                    <div class="card-body">
+                        <div id="loading-indicator" class="text-center d-none">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Loading data...</p>
+                        </div>
+                        <canvas id="currency-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/app.js"></script>
+</body>
+</html> 

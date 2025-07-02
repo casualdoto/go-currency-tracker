@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "Go Currency Tracker API",
-    "description": "API for getting currency rates from the Central Bank of Russia",
+    "description": "API for getting currency rates from the Central Bank of Russia with web interface for analysis",
     "version": "1.2.0",
     "contact": {
       "name": "Go Currency Tracker Team"
@@ -15,6 +15,25 @@
     }
   ],
   "paths": {
+    "/": {
+      "get": {
+        "summary": "Web interface",
+        "description": "Web interface for currency rate analysis",
+        "operationId": "webInterface",
+        "responses": {
+          "200": {
+            "description": "HTML page with web interface",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ping": {
       "get": {
         "summary": "API health check",
@@ -167,6 +186,130 @@
                 "schema": {
                   "type": "string",
                   "example": "Error getting currency rate"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rates/cbr/history": {
+      "get": {
+        "summary": "Get historical currency rates",
+        "description": "Returns historical rates for the specified currency over a specified number of days",
+        "operationId": "getCurrencyHistory",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Currency code in ISO 4217 format (e.g., USD, EUR)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "USD"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Number of days to look back (max 365)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365,
+              "example": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2023-05-15"
+                          },
+                          "code": {
+                            "type": "string",
+                            "example": "USD"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "US Dollar"
+                          },
+                          "nominal": {
+                            "type": "integer",
+                            "example": 1
+                          },
+                          "value": {
+                            "type": "number",
+                            "format": "float",
+                            "example": 75.4571
+                          },
+                          "previous": {
+                            "type": "number",
+                            "format": "float",
+                            "example": 75.2513
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Currency code not specified"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Error getting historical data"
+                    }
+                  }
                 }
               }
             }

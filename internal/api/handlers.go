@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/casualdoto/go-currency-tracker/internal/currency"
@@ -299,6 +300,132 @@ func CBRCurrencyHandler(w http.ResponseWriter, r *http.Request) {
 	response := APIResponse{
 		Success: true,
 		Data:    rate,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetCurrencyHistoryHandler handles requests for getting historical currency rates.
+// Requires query parameter code (currency code, e.g. USD).
+// Requires query parameter days (number of days to look back).
+func GetCurrencyHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	// Get currency code from request
+	currencyCode := r.URL.Query().Get("code")
+	if currencyCode == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Currency code not specified (parameter code)",
+		})
+		return
+	}
+
+	// Get days parameter from request
+	daysStr := r.URL.Query().Get("days")
+	if daysStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Days parameter not specified (parameter days)",
+		})
+		return
+	}
+
+	// Parse days parameter
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Invalid days parameter, must be a positive integer",
+		})
+		return
+	}
+
+	// Limit days to 365 to prevent excessive requests
+	if days > 365 {
+		days = 365
+	}
+
+	// Get current date
+	today := time.Now().Truncate(24 * time.Hour)
+
+	// Array to store historical rates
+	history := []map[string]interface{}{}
+
+	// Check if we have a database connection in the context
+	db, ok := r.Context().Value("db").(*storage.PostgresDB)
+
+	// Collect rates for each day
+	for i := 0; i < days; i++ {
+		date := today.AddDate(0, 0, -i)
+
+		var rate *currency.Valute
+		var err error
+
+		// Try to get from DB first if available
+		if ok && db != nil {
+			dbRate, dbErr := db.GetCurrencyRate(currencyCode, date)
+			if dbErr == nil {
+				// Convert DB rate to Valute format
+				rate = &currency.Valute{
+					ID:       dbRate.CurrencyCode,
+					NumCode:  "",
+					CharCode: dbRate.CurrencyCode,
+					Nominal:  dbRate.Nominal,
+					Name:     dbRate.CurrencyName,
+					Value:    dbRate.Value,
+					Previous: dbRate.Previous,
+				}
+			}
+		}
+
+		// If not found in DB, get from CBR API
+		if rate == nil {
+			dateStr := date.Format("2006-01-02")
+			rate, err = currency.GetCurrencyRate(currencyCode, dateStr)
+			if err != nil {
+				// Skip this date if there's an error
+				continue
+			}
+
+			// Save to DB in background if we have a connection
+			if ok && db != nil {
+				go func(date time.Time, rate *currency.Valute) {
+					dbRate := storage.CurrencyRate{
+						Date:         date,
+						CurrencyCode: rate.CharCode,
+						CurrencyName: rate.Name,
+						Nominal:      rate.Nominal,
+						Value:        rate.Value,
+						Previous:     rate.Previous,
+					}
+					if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+						fmt.Printf("Failed to save currency rate to database: %v\n", err)
+					}
+				}(date, rate)
+			}
+		}
+
+		// Add rate to history
+		history = append(history, map[string]interface{}{
+			"date":     date.Format("2006-01-02"),
+			"code":     rate.CharCode,
+			"name":     rate.Name,
+			"nominal":  rate.Nominal,
+			"value":    rate.Value,
+			"previous": rate.Previous,
+		})
+	}
+
+	// Form successful response
+	response := APIResponse{
+		Success: true,
+		Data:    history,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

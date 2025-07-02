@@ -83,6 +83,7 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	// CBR rates endpoints
 	r.Get("/rates/cbr", CBRRatesHandler)
 	r.Get("/rates/cbr/currency", CBRCurrencyHandler)
+	r.Get("/rates/cbr/history", GetCurrencyHistoryHandler)
 
 	// API documentation
 	r.Get("/api/docs", SwaggerUIHandler)
@@ -90,6 +91,19 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	r.Get("/api", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/docs", http.StatusFound)
 	})
+
+	// Web interface
+	// Serve index.html at the root
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		workDir, _ := os.Getwd()
+		indexPath := filepath.Join(workDir, "web", "index.html")
+		http.ServeFile(w, r, indexPath)
+	})
+
+	// Serve static files from the web directory
+	fileServer := http.FileServer(http.Dir("./web"))
+	r.Handle("/css/*", http.StripPrefix("/", fileServer))
+	r.Handle("/js/*", http.StripPrefix("/", fileServer))
 
 	return r
 }
