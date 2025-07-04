@@ -47,6 +47,35 @@
     transform: translateY(-2px);
 }
 
+#loading-indicator {
+    padding: 30px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    position: relative;
+    z-index: 100;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.loading-text {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 15px;
+}
+
+.progress {
+    height: 10px;
+    width: 80%;
+    margin: 0 auto;
+}
+
+#loading-status {
+    font-size: 0.9rem;
+    margin-top: 10px;
+}
+
 @media (max-width: 768px) {
     .metric-card {
         margin-bottom: 10px;

@@ -35,14 +35,71 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load currencies list when page loads
     loadCurrencies();
     
-    // Show/hide custom period inputs when period selection changes
+    // Enable Excel download button when currency or period changes
+    currencySelect.addEventListener('change', updateExcelDownloadButton);
     periodSelect.addEventListener('change', function() {
         if (this.value === 'custom') {
             customPeriodDiv.classList.remove('d-none');
         } else {
             customPeriodDiv.classList.add('d-none');
         }
+        updateExcelDownloadButton();
     });
+    
+    // Update Excel download button when custom dates change
+    startDateInput.addEventListener('change', updateExcelDownloadButton);
+    endDateInput.addEventListener('change', updateExcelDownloadButton);
+    
+    // Function to update Excel download button state
+    function updateExcelDownloadButton() {
+        const currencyCode = currencySelect.value;
+        
+        if (currencyCode) {
+            if (periodSelect.value === 'custom') {
+                // Custom date range
+                const startDate = new Date(startDateInput.value);
+                const endDate = new Date(endDateInput.value);
+                
+                // Validate dates
+                if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+                    downloadExcelBtn.disabled = true;
+                    return;
+                }
+                
+                // Calculate days between dates
+                const daysDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                
+                // Limit to 365 days
+                if (daysDiff > 365) {
+                    downloadExcelBtn.disabled = true;
+                    return;
+                }
+                
+                // Save current parameters for Excel download
+                currentCurrencyCode = currencyCode;
+                currentStartDate = formatDate(startDate);
+                currentEndDate = formatDate(endDate);
+            } else {
+                // Standard period
+                const period = periodSelect.value;
+                
+                // Calculate start date based on period
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(endDate.getDate() - parseInt(period));
+                
+                // Save current parameters for Excel download
+                currentCurrencyCode = currencyCode;
+                currentStartDate = formatDate(startDate);
+                currentEndDate = formatDate(endDate);
+            }
+            
+            // Enable Excel download button
+            downloadExcelBtn.disabled = false;
+        } else {
+            downloadExcelBtn.disabled = true;
+        }
+    }
     
     // Form submit handler
     currencyForm.addEventListener('submit', function(e) {
@@ -149,6 +206,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Select USD by default
                 if (data.data.USD) {
                     currencySelect.value = 'USD';
+                    
+                    // Update Excel download button state
+                    updateExcelDownloadButton();
+                    
                     // Load data for USD for a week by default
                     loadCurrencyHistory('USD', 7);
                 }
@@ -258,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return englishName + 's';
     }
     
-    // Load historical data for a currency
+    // Load historical data for a specific number of days
     async function loadCurrencyHistory(currencyCode, days) {
         try {
             // Reset metrics and destroy existing chart
@@ -271,11 +332,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show loading indicator
             loadingIndicator.classList.remove('d-none');
             document.getElementById('currency-chart').classList.add('d-none');
+            document.getElementById('loading-progress').style.width = '10%';
+            document.getElementById('loading-status').textContent = 'Retrieving currency data from database...';
             
             // Calculate dates for API request
             const endDate = new Date();
             const startDate = new Date();
-            startDate.setDate(endDate.getDate() - days);
+            startDate.setDate(endDate.getDate() - parseInt(days));
             
             const startDateStr = formatDate(startDate);
             const endDateStr = formatDate(endDate);
@@ -284,13 +347,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/rates/cbr/history/range?code=${currencyCode}&start_date=${startDateStr}&end_date=${endDateStr}`);
             const data = await response.json();
             
-            // Hide loading indicator
-            loadingIndicator.classList.add('d-none');
-            document.getElementById('currency-chart').classList.remove('d-none');
-            
             if (data.success && data.data && data.data.length > 0) {
-                // Enable Excel download button
-                downloadExcelBtn.disabled = false;
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '50%';
+                document.getElementById('loading-status').textContent = 'Processing data...';
+                
+                // Check if we have data for all days in the range (excluding weekends/holidays)
+                const expectedDaysCount = getExpectedBusinessDays(startDate, endDate);
+                const actualDaysCount = data.data.length;
+                
+                // If we don't have enough data, wait a bit and try again
+                if (actualDaysCount < expectedDaysCount * 0.9) { // Allow for 10% missing days
+                    document.getElementById('loading-status').textContent = `Loading more data (${actualDaysCount}/${expectedDaysCount} days)...`;
+                    document.getElementById('loading-progress').style.width = `${(actualDaysCount / expectedDaysCount) * 80}%`;
+                    
+                    setTimeout(() => {
+                        loadCurrencyHistory(currencyCode, days);
+                    }, 1000); // Wait 1 second before retrying
+                    return;
+                }
+                
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '80%';
+                document.getElementById('loading-status').textContent = 'Generating chart...';
                 
                 // Extract dates and values from response
                 const history = data.data;
@@ -322,15 +401,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Calculate metrics based on normalized values
                 calculateMetrics(values, currencyInfo.nominal);
                 
-                // Render chart with normalized values
-                renderChart(dates, values, currencyInfo);
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '100%';
+                document.getElementById('loading-status').textContent = 'Completed!';
                 
-                // Show warning if nominal changed
-                if (nominalChanges.changed) {
-                    const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
-                    alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
-                }
+                // Small delay to show the 100% progress
+                setTimeout(() => {
+                    // Hide loading indicator
+                    loadingIndicator.classList.add('d-none');
+                    document.getElementById('currency-chart').classList.remove('d-none');
+                    
+                    // Render chart with normalized values
+                    renderChart(dates, values, currencyInfo);
+                    
+                    // Show warning if nominal changed
+                    if (nominalChanges.changed) {
+                        const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
+                        alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
+                    }
+                }, 500);
+                
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
             } else {
+                // Hide loading indicator
+                loadingIndicator.classList.add('d-none');
+                document.getElementById('currency-chart').classList.remove('d-none');
+                
                 // Disable Excel download button
                 downloadExcelBtn.disabled = true;
                 
@@ -364,6 +461,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show loading indicator
             loadingIndicator.classList.remove('d-none');
             document.getElementById('currency-chart').classList.add('d-none');
+            document.getElementById('loading-progress').style.width = '10%';
+            document.getElementById('loading-status').textContent = 'Retrieving currency data from database...';
             
             // Format dates for API request
             const startDateStr = formatDate(startDate);
@@ -373,13 +472,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await fetch(`/rates/cbr/history/range?code=${currencyCode}&start_date=${startDateStr}&end_date=${endDateStr}`);
             const data = await response.json();
             
-            // Hide loading indicator
-            loadingIndicator.classList.add('d-none');
-            document.getElementById('currency-chart').classList.remove('d-none');
-            
             if (data.success && data.data && data.data.length > 0) {
-                // Enable Excel download button
-                downloadExcelBtn.disabled = false;
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '50%';
+                document.getElementById('loading-status').textContent = 'Processing data...';
+                
+                // Check if we have data for all days in the range (excluding weekends/holidays)
+                const expectedDaysCount = getExpectedBusinessDays(startDate, endDate);
+                const actualDaysCount = data.data.length;
+                
+                // If we don't have enough data, wait a bit and try again
+                if (actualDaysCount < expectedDaysCount * 0.9) { // Allow for 10% missing days
+                    document.getElementById('loading-status').textContent = `Loading more data (${actualDaysCount}/${expectedDaysCount} days)...`;
+                    document.getElementById('loading-progress').style.width = `${(actualDaysCount / expectedDaysCount) * 80}%`;
+                    
+                    setTimeout(() => {
+                        loadCurrencyHistoryCustom(currencyCode, startDate, endDate);
+                    }, 1000); // Wait 1 second before retrying
+                    return;
+                }
+                
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '80%';
+                document.getElementById('loading-status').textContent = 'Generating chart...';
                 
                 // Extract dates and values from response
                 const history = data.data;
@@ -411,15 +526,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Calculate metrics based on normalized values
                 calculateMetrics(values, currencyInfo.nominal);
                 
-                // Render chart with normalized values
-                renderChart(dates, values, currencyInfo);
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '100%';
+                document.getElementById('loading-status').textContent = 'Completed!';
                 
-                // Show warning if nominal changed
-                if (nominalChanges.changed) {
-                    const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
-                    alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
-                }
+                // Small delay to show the 100% progress
+                setTimeout(() => {
+                    // Hide loading indicator
+                    loadingIndicator.classList.add('d-none');
+                    document.getElementById('currency-chart').classList.remove('d-none');
+                    
+                    // Render chart with normalized values
+                    renderChart(dates, values, currencyInfo);
+                    
+                    // Show warning if nominal changed
+                    if (nominalChanges.changed) {
+                        const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
+                        alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
+                    }
+                }, 500);
+                
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
             } else {
+                // Hide loading indicator
+                loadingIndicator.classList.add('d-none');
+                document.getElementById('currency-chart').classList.remove('d-none');
+                
                 // Disable Excel download button
                 downloadExcelBtn.disabled = true;
                 
@@ -679,5 +812,30 @@ document.addEventListener('DOMContentLoaded', function() {
         const year = date.getFullYear();
         
         return `${day}.${month}.${year}`;
+    }
+    
+    // Helper function to estimate expected business days in a date range
+    function getExpectedBusinessDays(startDate, endDate) {
+        // Clone dates to avoid modifying the originals
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Set time to midnight to avoid time issues
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+        
+        let count = 0;
+        const curDate = new Date(start);
+        
+        while (curDate <= end) {
+            const dayOfWeek = curDate.getDay();
+            // Skip weekends (0 = Sunday, 6 = Saturday)
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                count++;
+            }
+            curDate.setDate(curDate.getDate() + 1);
+        }
+        
+        return count;
     }
 }); 
