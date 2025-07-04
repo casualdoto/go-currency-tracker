@@ -10,6 +10,7 @@ import (
 
 	"github.com/casualdoto/go-currency-tracker/internal/currency"
 	"github.com/casualdoto/go-currency-tracker/internal/storage"
+	"github.com/xuri/excelize/v2"
 )
 
 // APIResponse represents standard API response structure
@@ -654,4 +655,271 @@ func GetCurrencyHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// ExportCurrencyHistoryToExcelHandler handles requests for exporting historical currency rates by date range to Excel.
+// Requires query parameter code (currency code, e.g. USD).
+// Requires query parameters start_date and end_date in YYYY-MM-DD format.
+func ExportCurrencyHistoryToExcelHandler(w http.ResponseWriter, r *http.Request) {
+	// Get currency code from request
+	currencyCode := r.URL.Query().Get("code")
+	if currencyCode == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Currency code not specified (parameter code)",
+		})
+		return
+	}
+
+	// Get date parameters from request
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	if startDateStr == "" || endDateStr == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Both start_date and end_date parameters are required (format: YYYY-MM-DD)",
+		})
+		return
+	}
+
+	// Parse dates
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Invalid start_date format. Use YYYY-MM-DD",
+		})
+		return
+	}
+
+	endDate, err := time.Parse("2006-01-02", endDateStr)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Invalid end_date format. Use YYYY-MM-DD",
+		})
+		return
+	}
+
+	// Validate date range
+	if startDate.After(endDate) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "start_date must be before or equal to end_date",
+		})
+		return
+	}
+
+	// Limit range to 365 days
+	if endDate.Sub(startDate) > 365*24*time.Hour {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Date range cannot exceed 365 days",
+		})
+		return
+	}
+
+	// Check if we have a database connection in the context
+	db, ok := r.Context().Value("db").(*storage.PostgresDB)
+	if !ok || db == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Database connection not available",
+		})
+		return
+	}
+
+	// Get rates from database for the date range
+	dbRates, err := db.GetCurrencyRatesByDateRange(currencyCode, startDate, endDate)
+
+	// Array to store historical rates
+	history := []storage.CurrencyRate{}
+
+	// If we have data from DB, use it
+	if err == nil && len(dbRates) > 0 {
+		history = dbRates
+	} else {
+		// If no data in DB or there was an error, get from CBR API
+		// We'll iterate through each date in the range
+		for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+			dateStr := d.Format("2006-01-02")
+			rate, err := currency.GetCurrencyRate(currencyCode, dateStr)
+
+			if err != nil {
+				// Skip this date if there's an error (might be weekend/holiday)
+				continue
+			}
+
+			// Add rate to history
+			dbRate := storage.CurrencyRate{
+				Date:         d,
+				CurrencyCode: rate.CharCode,
+				CurrencyName: rate.Name,
+				Nominal:      rate.Nominal,
+				Value:        rate.Value,
+				Previous:     rate.Previous,
+			}
+			history = append(history, dbRate)
+
+			// Save all rates for this day to DB in background
+			go func(dateStr string, date time.Time, currentRate *currency.Valute) {
+				// Get all rates for this date
+				rates, err := currency.GetCBRRatesByDate(dateStr)
+				if err == nil {
+					// Convert API rates to database format
+					var dbRates []storage.CurrencyRate
+					for code, valute := range rates.Valute {
+						dbRates = append(dbRates, storage.CurrencyRate{
+							Date:         date,
+							CurrencyCode: code,
+							CurrencyName: valute.Name,
+							Nominal:      valute.Nominal,
+							Value:        valute.Value,
+							Previous:     valute.Previous,
+						})
+					}
+
+					// Save to database
+					if err := db.SaveCurrencyRates(dbRates); err != nil {
+						fmt.Printf("Failed to save currency rates to database: %v\n", err)
+					}
+				} else {
+					// If we couldn't get all rates, at least save this one
+					dbRate := storage.CurrencyRate{
+						Date:         date,
+						CurrencyCode: currentRate.CharCode,
+						CurrencyName: currentRate.Name,
+						Nominal:      currentRate.Nominal,
+						Value:        currentRate.Value,
+						Previous:     currentRate.Previous,
+					}
+					if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+						fmt.Printf("Failed to save currency rate to database: %v\n", err)
+					}
+				}
+			}(dateStr, d, rate)
+		}
+	}
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println("Error closing Excel file:", err)
+		}
+	}()
+
+	// Create a new sheet
+	sheetName := fmt.Sprintf("%s_rates", currencyCode)
+	index, err := f.NewSheet(sheetName)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Failed to create Excel sheet",
+		})
+		return
+	}
+
+	// Set headers
+	headers := []string{"Date", "Currency Code", "Currency Name", "Nominal", "Value", "Previous Value"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%c%d", 'A'+i, 1)
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Set column width
+	f.SetColWidth(sheetName, "A", "A", 12)
+	f.SetColWidth(sheetName, "B", "B", 15)
+	f.SetColWidth(sheetName, "C", "C", 30)
+	f.SetColWidth(sheetName, "D", "D", 10)
+	f.SetColWidth(sheetName, "E", "E", 12)
+	f.SetColWidth(sheetName, "F", "F", 15)
+
+	// Create a style for the header row
+	headerStyle, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Bold: true,
+			Size: 12,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{"#E0EBF5"},
+			Pattern: 1,
+		},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+	if err == nil {
+		f.SetCellStyle(sheetName, "A1", "F1", headerStyle)
+	}
+
+	// Create a style for data rows
+	dataStyle, err := f.NewStyle(&excelize.Style{
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+
+	// Fill data
+	for i, rate := range history {
+		row := i + 2 // Start from row 2 (after header)
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), rate.Date.Format("2006-01-02"))
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), rate.CurrencyCode)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), rate.CurrencyName)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), rate.Nominal)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), rate.Value)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), rate.Previous)
+
+		// Apply style to data row
+		if err == nil {
+			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), dataStyle)
+		}
+	}
+
+	// Set active sheet
+	f.SetActiveSheet(index)
+
+	// Set response headers for file download
+	fileName := fmt.Sprintf("%s_rates_%s_to_%s.xlsx", currencyCode, startDateStr, endDateStr)
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+
+	// Write the Excel file to the response
+	if err := f.Write(w); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(APIResponse{
+			Success: false,
+			Error:   "Failed to generate Excel file",
+		})
+		return
+	}
 }

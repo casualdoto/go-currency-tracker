@@ -12,6 +12,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const metricMax = document.getElementById('metric-max');
     const metricVolatility = document.getElementById('metric-volatility');
     const loadingIndicator = document.getElementById('loading-indicator');
+    const downloadExcelBtn = document.getElementById('download-excel');
+    
+    // Variables to store current analysis parameters
+    let currentCurrencyCode = '';
+    let currentStartDate = '';
+    let currentEndDate = '';
     
     // Chart context
     const ctx = document.getElementById('currency-chart').getContext('2d');
@@ -69,13 +75,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
+                // Save current parameters for Excel download
+                currentCurrencyCode = currencyCode;
+                currentStartDate = formatDate(startDate);
+                currentEndDate = formatDate(endDate);
+                
                 // Load data for custom period
                 loadCurrencyHistoryCustom(currencyCode, startDate, endDate);
             } else {
                 // Standard period
                 const period = periodSelect.value;
+                
+                // Calculate start date based on period
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(endDate.getDate() - parseInt(period));
+                
+                // Save current parameters for Excel download
+                currentCurrencyCode = currencyCode;
+                currentStartDate = formatDate(startDate);
+                currentEndDate = formatDate(endDate);
+                
                 loadCurrencyHistory(currencyCode, period);
             }
+        }
+    });
+    
+    // Excel download button handler
+    downloadExcelBtn.addEventListener('click', function() {
+        if (currentCurrencyCode && currentStartDate && currentEndDate) {
+            const excelUrl = `/rates/cbr/history/range/excel?code=${currentCurrencyCode}&start_date=${currentStartDate}&end_date=${currentEndDate}`;
+            window.location.href = excelUrl;
         }
     });
     
@@ -231,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load historical data for a currency
     async function loadCurrencyHistory(currencyCode, days) {
         try {
-            // Show loading indicator
+            // Reset metrics and destroy existing chart
             resetMetrics();
             if (currencyChart) {
                 currencyChart.destroy();
@@ -242,88 +272,15 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingIndicator.classList.remove('d-none');
             document.getElementById('currency-chart').classList.add('d-none');
             
-            // Request to API for historical data
-            const response = await fetch(`/rates/cbr/history?code=${currencyCode}&days=${days}`);
-            const data = await response.json();
+            // Calculate dates for API request
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - days);
             
-            // Hide loading indicator
-            loadingIndicator.classList.add('d-none');
-            document.getElementById('currency-chart').classList.remove('d-none');
-            
-            if (data.success && data.data && data.data.length > 0) {
-                // Extract dates and values from response
-                const history = data.data;
-                
-                // Sort by date (ascending - oldest first)
-                history.sort((a, b) => new Date(a.date) - new Date(b.date));
-                
-                const dates = history.map(item => item.date);
-                
-                // Check if nominal changes in the data
-                const nominalChanges = checkNominalChanges(history);
-                
-                // Normalize values based on nominal to ensure consistent comparison
-                // For example, if nominal changes from 10 to 1, we need to adjust the values
-                const values = history.map(item => {
-                    // Calculate the value per unit of currency
-                    return item.value / item.nominal;
-                });
-                
-                // Get currency info for chart display - use the most recent nominal
-                const mostRecentItem = history[history.length - 1];
-                const currencyInfo = {
-                    code: currencyCode,
-                    nominal: mostRecentItem.nominal,
-                    name: mostRecentItem.name,
-                    nominalChanged: nominalChanges.changed,
-                    nominalChangeDates: nominalChanges.dates
-                };
-                
-                // Calculate metrics based on normalized values
-                calculateMetrics(values, currencyInfo.nominal);
-                
-                // Render chart with normalized values
-                renderChart(dates, values, currencyInfo);
-                
-                // Show warning if nominal changed
-                if (nominalChanges.changed) {
-                    const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
-                    alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
-                }
-            } else {
-                alert('Failed to get historical data for the selected currency.');
-                resetMetrics();
-            }
-        } catch (error) {
-            // Hide loading indicator in case of error
-            loadingIndicator.classList.add('d-none');
-            document.getElementById('currency-chart').classList.remove('d-none');
-            
-            console.error('Error loading historical data:', error);
-            alert('Failed to load historical data. Please try again later.');
-            resetMetrics();
-        }
-    }
-    
-    // Load historical data for custom date range
-    async function loadCurrencyHistoryCustom(currencyCode, startDate, endDate) {
-        try {
-            // Show loading indicator
-            resetMetrics();
-            if (currencyChart) {
-                currencyChart.destroy();
-                currencyChart = null;
-            }
-            
-            // Show loading indicator
-            loadingIndicator.classList.remove('d-none');
-            document.getElementById('currency-chart').classList.add('d-none');
-            
-            // Format dates for API request
             const startDateStr = formatDate(startDate);
             const endDateStr = formatDate(endDate);
             
-            // Request to API for historical data using the new endpoint
+            // Request to API for historical data
             const response = await fetch(`/rates/cbr/history/range?code=${currencyCode}&start_date=${startDateStr}&end_date=${endDateStr}`);
             const data = await response.json();
             
@@ -332,6 +289,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('currency-chart').classList.remove('d-none');
             
             if (data.success && data.data && data.data.length > 0) {
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
+                
                 // Extract dates and values from response
                 const history = data.data;
                 
@@ -371,6 +331,98 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
                 }
             } else {
+                // Disable Excel download button
+                downloadExcelBtn.disabled = true;
+                
+                alert('No data available for the selected period. Try a different period.');
+                resetMetrics();
+            }
+        } catch (error) {
+            // Hide loading indicator in case of error
+            loadingIndicator.classList.add('d-none');
+            document.getElementById('currency-chart').classList.remove('d-none');
+            
+            // Disable Excel download button
+            downloadExcelBtn.disabled = true;
+            
+            console.error('Error loading historical data:', error);
+            alert('Failed to load historical data. Please try again later.');
+            resetMetrics();
+        }
+    }
+    
+    // Load historical data for custom date range
+    async function loadCurrencyHistoryCustom(currencyCode, startDate, endDate) {
+        try {
+            // Show loading indicator
+            resetMetrics();
+            if (currencyChart) {
+                currencyChart.destroy();
+                currencyChart = null;
+            }
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('d-none');
+            document.getElementById('currency-chart').classList.add('d-none');
+            
+            // Format dates for API request
+            const startDateStr = formatDate(startDate);
+            const endDateStr = formatDate(endDate);
+            
+            // Request to API for historical data using the new endpoint
+            const response = await fetch(`/rates/cbr/history/range?code=${currencyCode}&start_date=${startDateStr}&end_date=${endDateStr}`);
+            const data = await response.json();
+            
+            // Hide loading indicator
+            loadingIndicator.classList.add('d-none');
+            document.getElementById('currency-chart').classList.remove('d-none');
+            
+            if (data.success && data.data && data.data.length > 0) {
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
+                
+                // Extract dates and values from response
+                const history = data.data;
+                
+                // Sort by date (ascending)
+                history.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                // Check if nominal changes in the data
+                const nominalChanges = checkNominalChanges(history);
+                
+                const dates = history.map(item => item.date);
+                
+                // Normalize values based on nominal to ensure consistent comparison
+                const values = history.map(item => {
+                    // Calculate the value per unit of currency
+                    return item.value / item.nominal;
+                });
+                
+                // Get currency info for chart display - use the most recent nominal
+                const mostRecentItem = history[history.length - 1];
+                const currencyInfo = {
+                    code: currencyCode,
+                    nominal: mostRecentItem.nominal,
+                    name: mostRecentItem.name,
+                    nominalChanged: nominalChanges.changed,
+                    nominalChangeDates: nominalChanges.dates
+                };
+                
+                // Calculate metrics based on normalized values
+                calculateMetrics(values, currencyInfo.nominal);
+                
+                // Render chart with normalized values
+                renderChart(dates, values, currencyInfo);
+                
+                // Show warning if nominal changed
+                if (nominalChanges.changed) {
+                    const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
+                    alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
+                }
+            } else {
+                // Disable Excel download button
+                downloadExcelBtn.disabled = true;
+                
                 alert('No data available for the selected date range. Try a different period.');
                 resetMetrics();
             }
@@ -378,6 +430,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide loading indicator in case of error
             loadingIndicator.classList.add('d-none');
             document.getElementById('currency-chart').classList.remove('d-none');
+            
+            // Disable Excel download button
+            downloadExcelBtn.disabled = true;
             
             console.error('Error loading historical data:', error);
             alert('Failed to load historical data. Please try again later.');
