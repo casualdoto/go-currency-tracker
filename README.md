@@ -1,6 +1,6 @@
 # Go Currency Tracker
 
-A service for tracking currency exchange rates from the Central Bank of Russia (CBR) with REST API and web interface for analysis.
+A service for tracking currency exchange rates from the Central Bank of Russia (CBR) with REST API, web interface for analysis, and Telegram bot for daily updates.
 
 ## Features
 
@@ -8,6 +8,7 @@ A service for tracking currency exchange rates from the Central Bank of Russia (
 - Get specific currency rate by code
 - Select date for historical rates
 - Web interface for currency analysis with metrics and charts
+- Telegram bot for daily currency rate updates
 - OpenAPI documentation
 - PostgreSQL database for storing historical rates
 - Automatic daily updates at 23:59 UTC
@@ -18,6 +19,7 @@ A service for tracking currency exchange rates from the Central Bank of Russia (
 
 - Go 1.21+
 - Docker and Docker Compose (for PostgreSQL)
+- Telegram Bot Token (for bot functionality)
 
 ### Building and Running
 
@@ -26,14 +28,25 @@ A service for tracking currency exchange rates from the Central Bank of Russia (
 git clone https://github.com/casualdoto/go-currency-tracker.git
 cd go-currency-tracker
 
+# Copy environment example and set your Telegram Bot Token
+cp configs/.env.example .env
+# Edit .env file and set your TELEGRAM_BOT_TOKEN
+
+# Start all services using Docker Compose
+docker-compose up -d
+
+# Or start services individually
+
 # Start PostgreSQL database
 docker-compose up -d postgres
 
-# Build project
+# Build and run web server
 go build -o currency-tracker.exe ./cmd/server
-
-# Run server
 ./currency-tracker
+
+# Build and run Telegram bot
+go build -o currency-bot.exe ./cmd/bot
+./currency-bot
 ```
 
 ## Web Interface
@@ -51,6 +64,36 @@ The application includes a web interface for analyzing currency rates. Access it
   - Minimum and maximum values
   - Volatility percentage
 - Interactive chart showing currency rate changes over time
+- Link to subscribe to the Telegram bot for daily updates
+
+## Telegram Bot
+
+The application includes a Telegram bot that provides daily currency rate updates.
+
+### Bot Features
+
+- Subscribe to multiple currencies for daily updates
+- Get instant currency rates on demand
+- Compare current rates with previous day rates
+- View percentage changes in currency rates
+
+### Bot Commands
+
+- `/start` - Start the bot and see available commands
+- `/subscribe [currency]` - Subscribe to a currency (e.g., `/subscribe USD`)
+- `/unsubscribe [currency]` - Unsubscribe from a currency (e.g., `/unsubscribe USD`)
+- `/list` - List your subscriptions
+- `/rate [currency]` - Get current rate for a currency (e.g., `/rate USD`)
+
+### Setting Up the Bot
+
+1. Create a new bot with [@BotFather](https://t.me/BotFather) on Telegram
+2. Get your bot token
+3. Set the token in the `.env` file:
+   ```
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   ```
+4. Start the bot service using Docker Compose or directly
 
 ## API
 
@@ -110,7 +153,7 @@ CREATE TABLE currency_rates (
 
 ### Environment Variables
 
-You can configure the database connection using environment variables:
+You can configure the application using environment variables:
 
 - `DB_HOST` - Database host (default: localhost)
 - `DB_PORT` - Database port (default: 5432)
@@ -118,6 +161,7 @@ You can configure the database connection using environment variables:
 - `DB_PASSWORD` - Database password (default: currency_password)
 - `DB_NAME` - Database name (default: currency_db)
 - `DB_SSLMODE` - SSL mode (default: disable)
+- `TELEGRAM_BOT_TOKEN` - Telegram Bot API token (required for bot functionality)
 
 ## Testing
 

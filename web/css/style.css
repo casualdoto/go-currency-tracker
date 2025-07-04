@@ -47,6 +47,28 @@
     transform: translateY(-2px);
 }
 
+/* Telegram button styles */
+.btn-info {
+    background-color: #0088cc;
+    border-color: #0088cc;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.btn-info:hover {
+    background-color: #006699;
+    border-color: #006699;
+    transform: translateY(-2px);
+}
+
+.btn-info i.fab.fa-telegram {
+    margin-right: 5px;
+}
+
+.card-header.bg-info {
+    background-color: #0088cc !important;
+}
+
 #loading-indicator {
     padding: 30px;
     background-color: rgba(255, 255, 255, 0.9);
