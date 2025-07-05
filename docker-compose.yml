@@ -18,7 +18,14 @@ services:
       dockerfile: Dockerfile
     container_name: currency_tracker_web
     ports:
-      - "8080:8080"
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: currency_user
+      DB_PASSWORD: currency_password
+      DB_NAME: currency_db
+      DB_SSLMODE: disable
     depends_on:
       - postgres
     restart: unless-stopped
@@ -30,6 +37,13 @@ services:
     container_name: currency_tracker_bot
     env_file:
       - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: currency_user
+      DB_PASSWORD: currency_password
+      DB_NAME: currency_db
+      DB_SSLMODE: disable
     depends_on:
       - postgres
     restart: unless-stopped

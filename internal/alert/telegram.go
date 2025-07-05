@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
+	currency "github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
+	"github.com/casualdoto/go-currency-tracker/internal/storage"
 	"github.com/tucnak/telebot"
 )
 
@@ -21,12 +22,13 @@ type Subscription struct {
 // TelegramBot represents a Telegram bot instance
 type TelegramBot struct {
 	bot           *telebot.Bot
-	subscriptions map[int][]string // UserID -> []Currency
+	subscriptions map[int][]string // UserID -> []Currency (in-memory cache)
 	mu            sync.RWMutex
+	db            *storage.PostgresDB
 }
 
 // NewTelegramBot creates a new Telegram bot instance
-func NewTelegramBot(token string) (*TelegramBot, error) {
+func NewTelegramBot(token string, db *storage.PostgresDB) (*TelegramBot, error) {
 	bot, err := telebot.NewBot(telebot.Settings{
 		Token:  token,
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
@@ -36,10 +38,22 @@ func NewTelegramBot(token string) (*TelegramBot, error) {
 		return nil, err
 	}
 
+	// Initialize the subscriptions table if needed
+	if err := db.UpdateSchema(); err != nil {
+		return nil, fmt.Errorf("failed to update database schema: %w", err)
+	}
+
+	// Load subscriptions from database
+	subscriptions, err := db.GetAllTelegramSubscriptions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load subscriptions from database: %w", err)
+	}
+
 	return &TelegramBot{
 		bot:           bot,
-		subscriptions: make(map[int][]string),
+		subscriptions: subscriptions,
 		mu:            sync.RWMutex{},
+		db:            db,
 	}, nil
 }
 
@@ -92,6 +106,14 @@ func (t *TelegramBot) Start() {
 			t.subscriptions[m.Sender.ID] = append(currencies, currencyCode)
 		}
 
+		// Save to database
+		err = t.db.SaveTelegramSubscription(m.Sender.ID, currencyCode)
+		if err != nil {
+			log.Printf("Error saving subscription to database: %v", err)
+			t.bot.Send(m.Sender, "Failed to save subscription. Please try again later.")
+			return
+		}
+
 		t.bot.Send(m.Sender, fmt.Sprintf("You have successfully subscribed to %s", currencyCode))
 	})
 
@@ -129,17 +151,29 @@ func (t *TelegramBot) Start() {
 			return
 		}
 
+		// Delete from database
+		err := t.db.DeleteTelegramSubscription(m.Sender.ID, currencyCode)
+		if err != nil {
+			log.Printf("Error deleting subscription from database: %v", err)
+			t.bot.Send(m.Sender, "Failed to unsubscribe. Please try again later.")
+			return
+		}
+
 		t.subscriptions[m.Sender.ID] = newCurrencies
 		t.bot.Send(m.Sender, fmt.Sprintf("You have successfully unsubscribed from %s", currencyCode))
 	})
 
 	// Handle /list command
 	t.bot.Handle("/list", func(m *telebot.Message) {
-		t.mu.RLock()
-		defer t.mu.RUnlock()
+		// Get subscriptions from database to ensure we have the latest data
+		currencies, err := t.db.GetTelegramSubscriptions(m.Sender.ID)
+		if err != nil {
+			log.Printf("Error getting subscriptions from database: %v", err)
+			t.bot.Send(m.Sender, "Failed to retrieve your subscriptions. Please try again later.")
+			return
+		}
 
-		currencies, exists := t.subscriptions[m.Sender.ID]
-		if !exists || len(currencies) == 0 {
+		if len(currencies) == 0 {
 			t.bot.Send(m.Sender, "You don't have any subscriptions")
 			return
 		}
@@ -150,6 +184,11 @@ func (t *TelegramBot) Start() {
 		}
 
 		t.bot.Send(m.Sender, msg)
+
+		// Update in-memory cache
+		t.mu.Lock()
+		t.subscriptions[m.Sender.ID] = currencies
+		t.mu.Unlock()
 	})
 
 	// Handle /rate command
@@ -183,6 +222,17 @@ func (t *TelegramBot) Start() {
 
 // SendDailyUpdates sends daily updates to all subscribers
 func (t *TelegramBot) SendDailyUpdates() {
+	// Refresh subscriptions from database
+	subscriptions, err := t.db.GetAllTelegramSubscriptions()
+	if err != nil {
+		log.Printf("Error refreshing subscriptions from database: %v", err)
+		// Continue with in-memory cache if available
+	} else {
+		t.mu.Lock()
+		t.subscriptions = subscriptions
+		t.mu.Unlock()
+	}
+
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 

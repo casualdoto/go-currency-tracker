@@ -268,3 +268,131 @@ func (p *PostgresDB) GetCurrencyRatesByDateRange(code string, startDate, endDate
 
 	return rates, nil
 }
+
+// TelegramSubscription represents a telegram user's currency subscription
+type TelegramSubscription struct {
+	ID        int
+	UserID    int
+	Currency  string
+	CreatedAt time.Time
+}
+
+// UpdateSchema adds new tables if they don't exist
+func (p *PostgresDB) UpdateSchema() error {
+	query := `
+	CREATE TABLE IF NOT EXISTS telegram_subscriptions (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL,
+		currency VARCHAR(3) NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(user_id, currency)
+	);
+	
+	CREATE INDEX IF NOT EXISTS idx_telegram_subscriptions_user_id ON telegram_subscriptions(user_id);
+	`
+
+	_, err := p.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("failed to update schema: %w", err)
+	}
+
+	return nil
+}
+
+// SaveTelegramSubscription saves a telegram subscription to the database
+func (p *PostgresDB) SaveTelegramSubscription(userID int, currency string) error {
+	_, err := p.db.Exec(`
+		INSERT INTO telegram_subscriptions (user_id, currency)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, currency) 
+		DO NOTHING
+	`, userID, currency)
+
+	if err != nil {
+		return fmt.Errorf("failed to save telegram subscription: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteTelegramSubscription deletes a telegram subscription from the database
+func (p *PostgresDB) DeleteTelegramSubscription(userID int, currency string) error {
+	result, err := p.db.Exec(`
+		DELETE FROM telegram_subscriptions
+		WHERE user_id = $1 AND currency = $2
+	`, userID, currency)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete telegram subscription: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("subscription not found")
+	}
+
+	return nil
+}
+
+// GetTelegramSubscriptions retrieves all subscriptions for a specific user
+func (p *PostgresDB) GetTelegramSubscriptions(userID int) ([]string, error) {
+	rows, err := p.db.Query(`
+		SELECT currency
+		FROM telegram_subscriptions
+		WHERE user_id = $1
+		ORDER BY currency
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query telegram subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var currencies []string
+	for rows.Next() {
+		var currency string
+		if err := rows.Scan(&currency); err != nil {
+			return nil, fmt.Errorf("failed to scan currency: %w", err)
+		}
+		currencies = append(currencies, currency)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over currencies: %w", err)
+	}
+
+	return currencies, nil
+}
+
+// GetAllTelegramSubscriptions retrieves all telegram subscriptions
+func (p *PostgresDB) GetAllTelegramSubscriptions() (map[int][]string, error) {
+	rows, err := p.db.Query(`
+		SELECT user_id, currency
+		FROM telegram_subscriptions
+		ORDER BY user_id, currency
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all telegram subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	subscriptions := make(map[int][]string)
+	for rows.Next() {
+		var userID int
+		var currency string
+		if err := rows.Scan(&userID, &currency); err != nil {
+			return nil, fmt.Errorf("failed to scan subscription: %w", err)
+		}
+
+		subscriptions[userID] = append(subscriptions[userID], currency)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over subscriptions: %w", err)
+	}
+
+	return subscriptions, nil
+}

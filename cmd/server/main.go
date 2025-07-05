@@ -63,13 +63,13 @@ func main() {
 
 	// Start HTTP server
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":8081",
 		Handler: router,
 	}
 
 	// Graceful shutdown
 	go func() {
-		log.Println("Go Currency Monitor API started on :8080")
+		log.Println("Go Currency Monitor API started on :8081")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}
