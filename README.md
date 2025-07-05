@@ -17,9 +17,9 @@ A service for tracking currency exchange rates from the Central Bank of Russia (
 
 ### Requirements
 
-- Go 1.21+
-- Docker and Docker Compose (for PostgreSQL)
-- Telegram Bot Token (for bot functionality)
+- Docker and Docker Compose 
+- Telegram Bot Token 
+- Go is optional (if you want to build or run the app outside of Docker)
 
 ### Building and Running
 
