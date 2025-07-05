@@ -24,6 +24,8 @@ type Valute struct {
 	Previous float64 `json:"Previous"`
 }
 
+var CBRBaseURL = "https://www.cbr-xml-daily.ru"
+
 // Get rates from the CBR site for the current date
 func GetCBRRates() (*DailyRates, error) {
 	return GetCBRRatesByDate("")
@@ -34,7 +36,7 @@ func GetCBRRates() (*DailyRates, error) {
 // Date format: YYYY-MM-DD (for example, "2023-05-15")
 func GetCBRRatesByDate(date string) (*DailyRates, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := "https://www.cbr-xml-daily.ru/daily_json.js"
+	url := fmt.Sprintf("%s/daily_json.js", CBRBaseURL)
 
 	// If date is specified, form URL for archive
 	if date != "" {
@@ -48,7 +50,7 @@ func GetCBRRatesByDate(date string) (*DailyRates, error) {
 		// In cbr-xml-daily.ru API archive data is available by URL like:
 		// https://www.cbr-xml-daily.ru/archive/YYYY/MM/DD/daily_json.js
 		formattedDate := parsedDate.Format("2006/01/02")
-		url = fmt.Sprintf("https://www.cbr-xml-daily.ru/archive/%s/daily_json.js", formattedDate)
+		url = fmt.Sprintf("%s/archive/%s/daily_json.js", CBRBaseURL, formattedDate)
 	}
 
 	resp, err := client.Get(url)

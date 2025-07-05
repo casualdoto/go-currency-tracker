@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/casualdoto/go-currency-tracker/internal/currency"
+	"github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 	"github.com/go-chi/chi/v5"
 )
 

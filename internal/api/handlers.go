@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/casualdoto/go-currency-tracker/internal/currency"
+	"github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 	"github.com/casualdoto/go-currency-tracker/internal/storage"
 	"github.com/xuri/excelize/v2"
 )

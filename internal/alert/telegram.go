@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/casualdoto/go-currency-tracker/internal/currency"
+	"github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 	"github.com/tucnak/telebot"
 )
 

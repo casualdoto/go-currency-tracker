@@ -87,9 +87,7 @@ func TestGetCBRRates(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	// Replace URL with test server
-	httpClient := &http.Client{}
-	http.DefaultClient = httpClient
+	CBRBaseURL = server.URL
 
 	// Run test
 	rates, err := GetCBRRates()
@@ -120,9 +118,7 @@ func TestGetCBRRatesByDate(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	// Replace URL with test server
-	httpClient := &http.Client{}
-	http.DefaultClient = httpClient
+	CBRBaseURL = server.URL
 
 	// Run test
 	rates, err := GetCBRRatesByDate("2023-06-28")
@@ -153,9 +149,7 @@ func TestGetCurrencyRate(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	// Replace URL with test server
-	httpClient := &http.Client{}
-	http.DefaultClient = httpClient
+	CBRBaseURL = server.URL
 
 	// Run test for USD
 	usdRate, err := GetCurrencyRate("USD", "")
