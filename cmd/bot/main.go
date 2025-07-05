@@ -56,9 +56,9 @@ func main() {
 	bot.Start()
 	log.Println("Telegram bot started")
 
-	// Create a scheduler for daily updates at 16:00
+	// Create a scheduler for daily updates at 14:00 UTC
 	sched := scheduler.NewTelegramScheduler(bot)
-	sched.StartDailyUpdates(16)
+	sched.StartDailyUpdates(14)
 	// for test
 	//sched.RunNow()
 	log.Println("Daily updates scheduler started")
