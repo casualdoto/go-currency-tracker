@@ -23,6 +23,12 @@ func NewTelegramScheduler(bot *alert.TelegramBot) *TelegramScheduler {
 	}
 }
 
+// RunNow sends daily update immediately (for testing)
+func (s *TelegramScheduler) RunNow() {
+	log.Println("Running Telegram update immediately for testing")
+	s.bot.SendDailyUpdates()
+}
+
 // StartDailyUpdates starts sending daily updates at the specified hour
 func (s *TelegramScheduler) StartDailyUpdates(hour int) {
 	if s.isRunning {

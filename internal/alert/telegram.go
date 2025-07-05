@@ -253,12 +253,15 @@ func (t *TelegramBot) SendDailyUpdates() {
 			}
 
 			// Format the message
-			msg += fmt.Sprintf("Currency: %s (%s)\n", rate.Name, rate.CharCode)
+			msg += fmt.Sprintf("Currency: %s\n", rate.CharCode)
 			msg += fmt.Sprintf("Current rate: %.4f RUB (per %d unit)\n", rate.Value, rate.Nominal)
-			msg += fmt.Sprintf("Previous rate: %.4f RUB\n", rate.Previous)
+			msg += fmt.Sprintf("Previous rate: %.4f RUB (per %d unit)\n", rate.Previous, rate.Nominal)
 
-			// Calculate change percentage
-			changePercent := ((rate.Value - rate.Previous) / rate.Previous) * 100
+			// Calculate change percentage with respect to nominal
+			currentValuePerUnit := rate.Value / float64(rate.Nominal)
+			previousValuePerUnit := rate.Previous / float64(rate.Nominal)
+
+			changePercent := ((currentValuePerUnit - previousValuePerUnit) / previousValuePerUnit) * 100
 			if changePercent > 0 {
 				msg += fmt.Sprintf("Change: +%.2f%%\n\n", changePercent)
 			} else {

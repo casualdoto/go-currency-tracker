@@ -35,6 +35,9 @@ cp configs/.env.example .env
 # Start all services using Docker Compose
 docker-compose up -d
 
+#Rebuild and start
+docker-compose up -d --build
+
 # Or start services individually
 
 # Start PostgreSQL database
