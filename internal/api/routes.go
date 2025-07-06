@@ -87,6 +87,12 @@ func SetupRoutesWithDB(db *storage.PostgresDB) http.Handler {
 	r.Get("/rates/cbr/history/range", GetCurrencyHistoryByDateRangeHandler)
 	r.Get("/rates/cbr/history/range/excel", ExportCurrencyHistoryToExcelHandler)
 
+	// Crypto rates endpoints
+	r.Get("/rates/crypto/symbols", GetAvailableCryptoSymbolsHandler)
+	r.Get("/rates/crypto/history", GetCryptoHistoryHandler)
+	r.Get("/rates/crypto/history/range", GetCryptoHistoryByDateRangeHandler)
+	r.Get("/rates/crypto/history/range/excel", ExportCryptoHistoryToExcelHandler)
+
 	// API documentation
 	r.Get("/api/docs", SwaggerUIHandler)
 	r.Get("/api/openapi", OpenAPIHandler)

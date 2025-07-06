@@ -1,11 +1,12 @@
 # Go Currency Tracker
 
-A service for tracking currency exchange rates from the Central Bank of Russia (CBR) with REST API, web interface for analysis, and Telegram bot for daily updates.
+A service for tracking currency exchange rates from the Central Bank of Russia (CBR) and cryptocurrency rates from Binance with REST API, web interface for analysis, and Telegram bot for daily updates.
 
 ## Features
 
 - Get all currency rates from CBR
 - Get specific currency rate by code
+- Get cryptocurrency rates from Binance
 - Select date for historical rates
 - Web interface for currency analysis with metrics and charts
 - Telegram bot for daily currency rate updates
@@ -113,6 +114,10 @@ Server starts on port 8080 by default.
 - `GET /rates/cbr/currency?code=EUR&date=2023-05-15` - Get EUR rate for May 15, 2023
 - `GET /rates/cbr/history?code=USD&days=30` - Get USD rate history for the last 30 days
 - `GET /rates/cbr/history/range?code=USD&start_date=2023-01-01&end_date=2023-01-31` - Get USD rate history for custom date range
+- `GET /rates/crypto/symbols` - Get list of available cryptocurrency symbols
+- `GET /rates/crypto/history?symbol=BTC&days=30` - Get cryptocurrency rate history for the last 30 days
+- `GET /rates/crypto/history/range?symbol=BTC&start_date=2023-01-01&end_date=2023-01-31` - Get cryptocurrency rate history for custom date range
+- `GET /rates/crypto/history/range/excel?symbol=BTC&start_date=2023-01-01&end_date=2023-01-31` - Export cryptocurrency rate history to Excel
 - `GET /api/docs` - OpenAPI documentation
 
 ### Request examples
@@ -132,6 +137,18 @@ curl http://localhost:8080/rates/cbr/history?code=USD&days=30
 
 # Get USD rate history for custom date range
 curl http://localhost:8080/rates/cbr/history/range?code=USD&start_date=2023-01-01&end_date=2023-01-31
+
+# Get list of available cryptocurrency symbols
+curl http://localhost:8080/rates/crypto/symbols
+
+# Get BTC rate history for the last 30 days
+curl http://localhost:8080/rates/crypto/history?symbol=BTC&days=30
+
+# Get BTC rate history for custom date range
+curl http://localhost:8080/rates/crypto/history/range?symbol=BTC&start_date=2023-01-01&end_date=2023-01-31
+
+# Export BTC rate history to Excel
+curl -o btc_history.xlsx http://localhost:8080/rates/crypto/history/range/excel?symbol=BTC&start_date=2023-01-01&end_date=2023-01-31
 ```
 
 ## Database
@@ -151,6 +168,15 @@ CREATE TABLE currency_rates (
     previous DECIMAL(12, 4),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(date, currency_code)
+);
+
+CREATE TABLE crypto_rates (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    price DECIMAL(24, 8) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(date, symbol)
 );
 ```
 
