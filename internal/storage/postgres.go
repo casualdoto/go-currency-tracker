@@ -73,7 +73,7 @@ func (p *PostgresDB) InitSchema() error {
 
 	CREATE TABLE IF NOT EXISTS crypto_rates (
 		id SERIAL PRIMARY KEY,
-		timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+		timestamp BIGINT NOT NULL,
 		symbol VARCHAR(20) NOT NULL,
 		open DECIMAL(24, 8) NOT NULL,
 		high DECIMAL(24, 8) NOT NULL,
@@ -300,6 +300,15 @@ type CryptoRate struct {
 
 // SaveCryptoRates saves multiple cryptocurrency rates to the database
 func (p *PostgresDB) SaveCryptoRates(rates []CryptoRate) error {
+	fmt.Printf("SaveCryptoRates: Attempting to save %d rates\n", len(rates))
+
+	if len(rates) > 0 {
+		fmt.Printf("First rate: Symbol=%s, Timestamp=%s, Unix=%d\n",
+			rates[0].Symbol,
+			rates[0].Timestamp.Format("2006-01-02 15:04:05"),
+			rates[0].Timestamp.Unix())
+	}
+
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -324,8 +333,16 @@ func (p *PostgresDB) SaveCryptoRates(rates []CryptoRate) error {
 	defer stmt.Close()
 
 	for _, rate := range rates {
+		// Convert time.Time to Unix timestamp in seconds
+		unixTimestamp := rate.Timestamp.Unix()
+
+		fmt.Printf("Inserting rate: Symbol=%s, Timestamp=%s, Unix=%d\n",
+			rate.Symbol,
+			rate.Timestamp.Format("2006-01-02 15:04:05"),
+			unixTimestamp)
+
 		_, err := stmt.Exec(
-			rate.Timestamp,
+			unixTimestamp, // Use Unix timestamp instead of time.Time
 			rate.Symbol,
 			rate.Open,
 			rate.High,
@@ -342,6 +359,7 @@ func (p *PostgresDB) SaveCryptoRates(rates []CryptoRate) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	fmt.Printf("SaveCryptoRates: Successfully saved %d rates\n", len(rates))
 	return nil
 }
 
@@ -362,9 +380,11 @@ func (p *PostgresDB) GetCryptoRatesBySymbol(symbol string, limit int) ([]CryptoR
 	var rates []CryptoRate
 	for rows.Next() {
 		var rate CryptoRate
+		var timestampUnix int64 // Use int64 to store Unix timestamp
+
 		if err := rows.Scan(
 			&rate.ID,
-			&rate.Timestamp,
+			&timestampUnix, // Scan into Unix timestamp
 			&rate.Symbol,
 			&rate.Open,
 			&rate.High,
@@ -375,6 +395,10 @@ func (p *PostgresDB) GetCryptoRatesBySymbol(symbol string, limit int) ([]CryptoR
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan crypto rate: %w", err)
 		}
+
+		// Convert Unix timestamp back to time.Time
+		rate.Timestamp = time.Unix(timestampUnix, 0)
+
 		rates = append(rates, rate)
 	}
 
@@ -387,12 +411,16 @@ func (p *PostgresDB) GetCryptoRatesBySymbol(symbol string, limit int) ([]CryptoR
 
 // GetCryptoRatesByDateRange retrieves cryptocurrency rates for a specific symbol within a date range
 func (p *PostgresDB) GetCryptoRatesByDateRange(symbol string, startTime, endTime time.Time) ([]CryptoRate, error) {
+	// Convert time.Time to Unix timestamp in seconds
+	startUnix := startTime.Unix()
+	endUnix := endTime.Unix()
+
 	rows, err := p.db.Query(`
 		SELECT id, timestamp, symbol, open, high, low, close, volume, created_at
 		FROM crypto_rates
 		WHERE symbol = $1 AND timestamp >= $2 AND timestamp <= $3
 		ORDER BY timestamp DESC
-	`, symbol, startTime, endTime)
+	`, symbol, startUnix, endUnix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query crypto rates: %w", err)
 	}
@@ -401,9 +429,11 @@ func (p *PostgresDB) GetCryptoRatesByDateRange(symbol string, startTime, endTime
 	var rates []CryptoRate
 	for rows.Next() {
 		var rate CryptoRate
+		var timestampUnix int64 // Use int64 to store Unix timestamp
+
 		if err := rows.Scan(
 			&rate.ID,
-			&rate.Timestamp,
+			&timestampUnix, // Scan into Unix timestamp
 			&rate.Symbol,
 			&rate.Open,
 			&rate.High,
@@ -414,6 +444,10 @@ func (p *PostgresDB) GetCryptoRatesByDateRange(symbol string, startTime, endTime
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan crypto rate: %w", err)
 		}
+
+		// Convert Unix timestamp back to time.Time
+		rate.Timestamp = time.Unix(timestampUnix, 0)
+
 		rates = append(rates, rate)
 	}
 
@@ -465,7 +499,7 @@ func (p *PostgresDB) UpdateSchema() error {
 	
 	CREATE TABLE IF NOT EXISTS crypto_rates (
 		id SERIAL PRIMARY KEY,
-		timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+		timestamp BIGINT NOT NULL,
 		symbol VARCHAR(20) NOT NULL,
 		open DECIMAL(24, 8) NOT NULL,
 		high DECIMAL(24, 8) NOT NULL,

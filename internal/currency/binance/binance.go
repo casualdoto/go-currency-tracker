@@ -156,23 +156,37 @@ func (c *Client) GetCryptoToRubRate(cryptoSymbol string, timestamp time.Time) (*
 
 // GetHistoricalCryptoToRubRates retrieves historical cryptocurrency to RUB rates for a date range
 func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval KlineInterval, startTime, endTime time.Time) ([]CryptoRate, error) {
+	fmt.Printf("GetHistoricalCryptoToRubRates: Getting rates for %s from %s to %s with interval %s\n",
+		cryptoSymbol,
+		startTime.Format("2006-01-02"),
+		endTime.Format("2006-01-02"),
+		string(interval))
+
 	// Get crypto/USDT rates
 	cryptoUsdtRates, err := c.GetHistoricalKlines(cryptoSymbol+"USDT", interval, startTime, endTime)
 	if err != nil {
+		fmt.Printf("Error getting %s/USDT rates: %v\n", cryptoSymbol, err)
 		return nil, fmt.Errorf("failed to get %s/USDT rates: %w", cryptoSymbol, err)
 	}
 	if len(cryptoUsdtRates) == 0 {
+		fmt.Printf("No %s/USDT rate data available\n", cryptoSymbol)
 		return nil, fmt.Errorf("no %s/USDT rate data available", cryptoSymbol)
 	}
+
+	fmt.Printf("Got %d %s/USDT rates\n", len(cryptoUsdtRates), cryptoSymbol)
 
 	// Get USDT/RUB rates
 	usdtRubRates, err := c.GetHistoricalKlines("USDTRUB", interval, startTime, endTime)
 	if err != nil {
+		fmt.Printf("Error getting USDT/RUB rates: %v\n", err)
 		return nil, fmt.Errorf("failed to get USDT/RUB rates: %w", err)
 	}
 	if len(usdtRubRates) == 0 {
+		fmt.Printf("No USDT/RUB rate data available\n")
 		return nil, fmt.Errorf("no USDT/RUB rate data available")
 	}
+
+	fmt.Printf("Got %d USDT/RUB rates\n", len(usdtRubRates))
 
 	// Map USDT/RUB rates by timestamp for quick lookup
 	usdtRubRatesByTime := make(map[int64]CryptoRate, len(usdtRubRates))
@@ -182,6 +196,10 @@ func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval Kli
 
 	// Calculate crypto/RUB rates
 	result := make([]CryptoRate, 0, len(cryptoUsdtRates))
+	matchedCount := 0
+	closestCount := 0
+	skippedCount := 0
+
 	for _, cryptoRate := range cryptoUsdtRates {
 		// Find matching USDT/RUB rate by timestamp
 		usdtRate, exists := usdtRubRatesByTime[cryptoRate.Timestamp.Unix()]
@@ -200,10 +218,14 @@ func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval Kli
 
 			// Skip if no close match found (more than 1 hour difference)
 			if minDiff > 3600 {
+				skippedCount++
 				continue
 			}
 
 			usdtRate = closestUsdtRate
+			closestCount++
+		} else {
+			matchedCount++
 		}
 
 		// Calculate crypto/RUB rate
@@ -218,6 +240,15 @@ func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval Kli
 		}
 
 		result = append(result, cryptoRubRate)
+	}
+
+	fmt.Printf("Generated %d %s/RUB rates (exact matches: %d, closest matches: %d, skipped: %d)\n",
+		len(result), cryptoSymbol, matchedCount, closestCount, skippedCount)
+
+	if len(result) > 0 {
+		fmt.Printf("First result: Symbol=%s, Timestamp=%s\n",
+			result[0].Symbol,
+			result[0].Timestamp.Format("2006-01-02 15:04:05"))
 	}
 
 	return result, nil

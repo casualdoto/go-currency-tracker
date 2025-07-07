@@ -1008,7 +1008,11 @@ func GetCryptoHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := endTime.AddDate(0, 0, -days)
 
 	// Try to get data from database
-	rates, err := db.GetCryptoRatesByDateRange(symbol+"/RUB", startTime, endTime)
+	// Use symbol with /RUB suffix as this format is used in Binance API
+	dbSymbol := symbol + "/RUB"
+	rates, err := db.GetCryptoRatesByDateRange(dbSymbol, startTime, endTime)
+
+	// If data is not found in DB or there was an error, request from Binance API
 	if err != nil || len(rates) == 0 {
 		// If no data in database, fetch from Binance API
 		binanceClient := binance.NewClient()
@@ -1045,7 +1049,7 @@ func GetCryptoHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		for i, rate := range cryptoRates {
 			dbRates[i] = storage.CryptoRate{
 				Timestamp: rate.Timestamp,
-				Symbol:    rate.Symbol,
+				Symbol:    rate.Symbol, 
 				Open:      rate.Open,
 				High:      rate.High,
 				Low:       rate.Low,
@@ -1227,7 +1231,11 @@ func GetCryptoHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Try to get data from database
-	rates, err := db.GetCryptoRatesByDateRange(symbol+"/RUB", startTime, endTime)
+	// Use symbol with /RUB suffix as this format is used in Binance API
+	dbSymbol := symbol + "/RUB"
+	rates, err := db.GetCryptoRatesByDateRange(dbSymbol, startTime, endTime)
+
+	// If data is not found in DB or there was an error, request from Binance API
 	if err != nil || len(rates) == 0 {
 		// If no data in database, fetch from Binance API
 		binanceClient := binance.NewClient()
@@ -1260,12 +1268,25 @@ func GetCryptoHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		// Log data received from Binance API
+		fmt.Printf("Received %d rates from Binance API for %s from %s to %s\n",
+			len(cryptoRates),
+			symbol,
+			startTime.Format("2006-01-02"),
+			endTime.Format("2006-01-02"))
+
+		if len(cryptoRates) > 0 {
+			fmt.Printf("First rate: Symbol=%s, Timestamp=%s\n",
+				cryptoRates[0].Symbol,
+				cryptoRates[0].Timestamp.Format("2006-01-02 15:04:05"))
+		}
+
 		// Convert to storage.CryptoRate format
 		dbRates := make([]storage.CryptoRate, len(cryptoRates))
 		for i, rate := range cryptoRates {
 			dbRates[i] = storage.CryptoRate{
 				Timestamp: rate.Timestamp,
-				Symbol:    rate.Symbol,
+				Symbol:    rate.Symbol, // Symbol already contains the /RUB suffix
 				Open:      rate.Open,
 				High:      rate.High,
 				Low:       rate.Low,
@@ -1280,6 +1301,8 @@ func GetCryptoHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				// Log the error but continue
 				fmt.Printf("Failed to save crypto rates to database: %v\n", err)
+			} else {
+				fmt.Printf("Successfully saved %d rates to database\n", len(dbRates))
 			}
 		}
 
@@ -1483,7 +1506,11 @@ func ExportCryptoHistoryToExcelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to get data from database
-	rates, err := db.GetCryptoRatesByDateRange(symbol+"/RUB", startTime, endTime)
+	// Use symbol with /RUB suffix as this format is used in Binance API
+	dbSymbol := symbol + "/RUB"
+	rates, err := db.GetCryptoRatesByDateRange(dbSymbol, startTime, endTime)
+
+	// If data is not found in DB or there was an error, request from Binance API
 	if err != nil || len(rates) == 0 {
 		// If no data in database, fetch from Binance API
 		binanceClient := binance.NewClient()
@@ -1521,7 +1548,7 @@ func ExportCryptoHistoryToExcelHandler(w http.ResponseWriter, r *http.Request) {
 		for i, rate := range cryptoRates {
 			dbRates[i] = storage.CryptoRate{
 				Timestamp: rate.Timestamp,
-				Symbol:    rate.Symbol,
+				Symbol:    rate.Symbol, // Symbol already contains the /RUB suffix
 				Open:      rate.Open,
 				High:      rate.High,
 				Low:       rate.Low,
@@ -1530,15 +1557,14 @@ func ExportCryptoHistoryToExcelHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Save to database in background
-		go func(dbRates []storage.CryptoRate) {
-			if len(dbRates) > 0 {
-				err := db.SaveCryptoRates(dbRates)
-				if err != nil {
-					fmt.Printf("Failed to save crypto rates to database: %v\n", err)
-				}
+		// Save to database
+		if len(dbRates) > 0 {
+			err = db.SaveCryptoRates(dbRates)
+			if err != nil {
+				// Log the error but continue
+				fmt.Printf("Failed to save crypto rates to database: %v\n", err)
 			}
-		}(dbRates)
+		}
 
 		// Create Excel file
 		file := excelize.NewFile()
