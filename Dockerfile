@@ -28,6 +28,10 @@ COPY --from=builder /app/web ./web
 # Copy the configs directory
 COPY --from=builder /app/configs ./configs
 
+# Create openapi directory and copy openapi.json
+RUN mkdir -p /app/openapi
+COPY --from=builder /app/openapi/openapi.json /app/openapi/
+
 # Create a non-root user
 RUN adduser -D -g '' appuser && \
     chown -R appuser:appuser /app
@@ -35,7 +39,7 @@ RUN adduser -D -g '' appuser && \
 USER appuser
 
 # Expose the port
-EXPOSE 8080
+EXPOSE 8081
 
 # Run the application
 CMD ["./server"] 

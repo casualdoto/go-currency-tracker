@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8080",
+      "url": "http://localhost:8081",
       "description": "Local development server"
     }
   ],
@@ -436,7 +436,7 @@
     "/rates/crypto/symbols": {
       "get": {
         "summary": "Get available cryptocurrency symbols",
-        "description": "Returns a list of available cryptocurrency symbols for historical data",
+        "description": "Returns a list of available cryptocurrency symbols that can be used with other endpoints",
         "operationId": "getAvailableCryptoSymbols",
         "responses": {
           "200": {
@@ -465,10 +465,19 @@
           "500": {
             "description": "Internal server error",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Database connection not available"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Database connection not available"
+                    }
+                  }
                 }
               }
             }
@@ -478,8 +487,8 @@
     },
     "/rates/crypto/history": {
       "get": {
-        "summary": "Get historical cryptocurrency rates",
-        "description": "Returns historical rates for the specified cryptocurrency over a specified number of days",
+        "summary": "Get cryptocurrency historical data",
+        "description": "Returns historical data for the specified cryptocurrency over a specified number of days",
         "operationId": "getCryptoHistory",
         "parameters": [
           {
@@ -531,10 +540,19 @@
           "400": {
             "description": "Bad request",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Symbol parameter is required"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Symbol parameter is required"
+                    }
+                  }
                 }
               }
             }
@@ -542,10 +560,19 @@
           "500": {
             "description": "Internal server error",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Failed to get cryptocurrency rates"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Failed to get cryptocurrency rates"
+                    }
+                  }
                 }
               }
             }
@@ -555,8 +582,8 @@
     },
     "/rates/crypto/history/range": {
       "get": {
-        "summary": "Get historical cryptocurrency rates for a date range",
-        "description": "Returns historical rates for the specified cryptocurrency within a specified date range",
+        "summary": "Get cryptocurrency historical data by date range",
+        "description": "Returns historical data for the specified cryptocurrency within a specified date range",
         "operationId": "getCryptoHistoryByDateRange",
         "parameters": [
           {
@@ -618,10 +645,19 @@
           "400": {
             "description": "Bad request",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Symbol parameter is required"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Start date parameter is required"
+                    }
+                  }
                 }
               }
             }
@@ -629,10 +665,19 @@
           "500": {
             "description": "Internal server error",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Failed to get cryptocurrency rates"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Failed to get cryptocurrency rates"
+                    }
+                  }
                 }
               }
             }
@@ -642,8 +687,8 @@
     },
     "/rates/crypto/history/range/excel": {
       "get": {
-        "summary": "Export historical cryptocurrency rates to Excel",
-        "description": "Returns an Excel file with historical rates for the specified cryptocurrency within a specified date range",
+        "summary": "Export cryptocurrency historical data to Excel",
+        "description": "Returns an Excel file with historical data for the specified cryptocurrency within a specified date range",
         "operationId": "exportCryptoHistoryToExcel",
         "parameters": [
           {
@@ -681,7 +726,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Excel file with cryptocurrency rates",
+            "description": "Excel file with cryptocurrency historical data",
             "content": {
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
                 "schema": {
@@ -694,10 +739,19 @@
           "400": {
             "description": "Bad request",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Symbol parameter is required"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Start date parameter is required"
+                    }
+                  }
                 }
               }
             }
@@ -705,10 +759,19 @@
           "500": {
             "description": "Internal server error",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "Failed to get cryptocurrency rates"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Failed to write Excel file"
+                    }
+                  }
                 }
               }
             }
@@ -821,28 +884,27 @@
           },
           "date": {
             "type": "string",
-            "format": "date-time",
             "example": "2023-01-01 00:00:00"
           },
           "open": {
             "type": "number",
             "format": "float",
-            "example": 16547.32
+            "example": 16547.83
           },
           "high": {
             "type": "number",
             "format": "float",
-            "example": 16612.45
+            "example": 16602.45
           },
           "low": {
             "type": "number",
             "format": "float",
-            "example": 16432.67
+            "example": 16512.56
           },
           "close": {
             "type": "number",
             "format": "float",
-            "example": 16542.78
+            "example": 16575.23
           },
           "volume": {
             "type": "number",

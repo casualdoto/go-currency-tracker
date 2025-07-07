@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -163,12 +164,14 @@ func SwaggerUIHandler(w http.ResponseWriter, r *http.Request) {
 // OpenAPIHandler serves the OpenAPI specification
 func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 	var docsPath string
+	var searchPaths []string
 
 	// Try to find documentation file in several locations
 	// 1. First check relative path from current working directory
 	workDir, err := os.Getwd()
 	if err == nil {
 		path := filepath.Join(workDir, "openapi", "openapi.json")
+		searchPaths = append(searchPaths, path)
 		if _, err := os.Stat(path); err == nil {
 			docsPath = path
 		}
@@ -179,6 +182,7 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 		projectRoot := getProjectRoot()
 		if projectRoot != "" {
 			path := filepath.Join(projectRoot, "openapi", "openapi.json")
+			searchPaths = append(searchPaths, path)
 			if _, err := os.Stat(path); err == nil {
 				docsPath = path
 			}
@@ -191,15 +195,34 @@ func OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			execDir := filepath.Dir(execPath)
 			path := filepath.Join(execDir, "openapi", "openapi.json")
+			searchPaths = append(searchPaths, path)
 			if _, err := os.Stat(path); err == nil {
 				docsPath = path
 			}
 		}
 	}
 
+	// 4. Try direct paths
+	if docsPath == "" {
+		directPaths := []string{
+			"/app/openapi/openapi.json",
+			"./openapi/openapi.json",
+			"../openapi/openapi.json",
+		}
+		for _, path := range directPaths {
+			searchPaths = append(searchPaths, path)
+			if _, err := os.Stat(path); err == nil {
+				docsPath = path
+				break
+			}
+		}
+	}
+
 	// If file not found in any location
 	if docsPath == "" {
-		http.Error(w, "API documentation not found", http.StatusNotFound)
+		errMsg := fmt.Sprintf("API documentation not found. Searched in: %s", strings.Join(searchPaths, ", "))
+		fmt.Println(errMsg)
+		http.Error(w, errMsg, http.StatusNotFound)
 		return
 	}
 
