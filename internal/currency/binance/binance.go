@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/adshao/go-binance/v2"
+	cbr "github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 )
 
 // KlineInterval represents the interval for kline/candlestick data
@@ -113,11 +114,44 @@ func (c *Client) GetCryptoToRubRate(cryptoSymbol string, timestamp time.Time) (*
 
 	// Get USDT/RUB rate
 	usdtRubRates, err := c.GetHistoricalKlines("USDTRUB", Interval1h, startTime, endTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get USDT/RUB rate: %w", err)
-	}
-	if len(usdtRubRates) == 0 {
-		return nil, fmt.Errorf("no USDT/RUB rate data available")
+	if err != nil || len(usdtRubRates) == 0 {
+		// If failed to get USDT/RUB rate from Binance, use USD rate from CBR
+		fmt.Printf("Error getting USDT/RUB rate or no data available: %v\n", err)
+		fmt.Printf("Falling back to CBR USD rate\n")
+
+		// Get USD rate from CBR for the current date
+		dateStr := timestamp.Format("2006-01-02")
+		usdRate, err := cbr.GetCurrencyRate("USD", dateStr)
+		if err != nil || usdRate == nil {
+			return nil, fmt.Errorf("failed to get USD/RUB rate from CBR: %w", err)
+		}
+
+		fmt.Printf("Got USD rate from CBR for %s: %.4f RUB\n", dateStr, usdRate.Value)
+
+		// Find closest crypto rate to the requested timestamp
+		var closestCryptoRate CryptoRate
+		var minCryptoDiff time.Duration = time.Hour * 24
+
+		for _, rate := range cryptoUsdtRates {
+			diff := absDuration(rate.Timestamp.Sub(timestamp))
+			if diff < minCryptoDiff {
+				minCryptoDiff = diff
+				closestCryptoRate = rate
+			}
+		}
+
+		// Calculate crypto/RUB rate using CBR USD rate
+		cryptoRubRate := CryptoRate{
+			Symbol:    cryptoSymbol + "/RUB",
+			Timestamp: timestamp,
+			Open:      closestCryptoRate.Open * usdRate.Value,
+			High:      closestCryptoRate.High * usdRate.Value,
+			Low:       closestCryptoRate.Low * usdRate.Value,
+			Close:     closestCryptoRate.Close * usdRate.Value,
+			Volume:    closestCryptoRate.Volume,
+		}
+
+		return &cryptoRubRate, nil
 	}
 
 	// Find closest rates to the requested timestamp
@@ -177,13 +211,95 @@ func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval Kli
 
 	// Get USDT/RUB rates
 	usdtRubRates, err := c.GetHistoricalKlines("USDTRUB", interval, startTime, endTime)
-	if err != nil {
-		fmt.Printf("Error getting USDT/RUB rates: %v\n", err)
-		return nil, fmt.Errorf("failed to get USDT/RUB rates: %w", err)
-	}
-	if len(usdtRubRates) == 0 {
-		fmt.Printf("No USDT/RUB rate data available\n")
-		return nil, fmt.Errorf("no USDT/RUB rate data available")
+	if err != nil || len(usdtRubRates) == 0 {
+		// If failed to get USDT/RUB rates from Binance, use USD rates from CBR
+		fmt.Printf("Error getting USDT/RUB rates or no data available: %v\n", err)
+		fmt.Printf("Falling back to CBR USD rates\n")
+
+		// Create an empty map to store USD rates by date
+		cbrRates := make(map[string]float64)
+
+		// Get USD rates for each day in the range
+		currentDate := startTime
+		for currentDate.Before(endTime) || currentDate.Equal(endTime) {
+			dateStr := currentDate.Format("2006-01-02")
+
+			// Get USD rate from CBR
+			usdRate, err := cbr.GetCurrencyRate("USD", dateStr)
+			if err == nil && usdRate != nil {
+				// Save rate to the map by date
+				cbrRates[dateStr] = usdRate.Value
+				fmt.Printf("Got USD rate from CBR for %s: %.4f RUB\n", dateStr, usdRate.Value)
+			} else {
+				fmt.Printf("Failed to get USD rate from CBR for %s: %v\n", dateStr, err)
+			}
+
+			// Move to the next day
+			currentDate = currentDate.AddDate(0, 0, 1)
+		}
+
+		// If couldn't get any rates from CBR, return an error
+		if len(cbrRates) == 0 {
+			return nil, fmt.Errorf("failed to get USD/RUB rates from CBR and USDT/RUB rates from Binance")
+		}
+
+		// Calculate crypto/RUB rates using USD rates from CBR
+		result := make([]CryptoRate, 0, len(cryptoUsdtRates))
+
+		for _, cryptoRate := range cryptoUsdtRates {
+			// Get date as string
+			dateStr := cryptoRate.Timestamp.Format("2006-01-02")
+
+			// Find USD rate for this date
+			usdRate, exists := cbrRates[dateStr]
+			if !exists {
+				// If no rate for this date, find the closest one
+				var closestDate string
+				var minDiff int = 100 // maximum difference in days
+
+				for date := range cbrRates {
+					rateDate, _ := time.Parse("2006-01-02", date)
+					diff := int(abs(rateDate.Unix()-cryptoRate.Timestamp.Unix()) / (24 * 60 * 60))
+					if diff < minDiff {
+						minDiff = diff
+						closestDate = date
+					}
+				}
+
+				// If found closest date within 7 days, use it
+				if minDiff <= 7 && closestDate != "" {
+					usdRate = cbrRates[closestDate]
+					fmt.Printf("Using closest USD rate from %s for %s\n", closestDate, dateStr)
+				} else {
+					// Otherwise skip this data point
+					fmt.Printf("Skipping rate for %s, no close USD rate found\n", dateStr)
+					continue
+				}
+			}
+
+			// Calculate crypto/RUB rate
+			cryptoRubRate := CryptoRate{
+				Symbol:    cryptoSymbol + "/RUB",
+				Timestamp: cryptoRate.Timestamp,
+				Open:      cryptoRate.Open * usdRate,
+				High:      cryptoRate.High * usdRate,
+				Low:       cryptoRate.Low * usdRate,
+				Close:     cryptoRate.Close * usdRate,
+				Volume:    cryptoRate.Volume,
+			}
+
+			result = append(result, cryptoRubRate)
+		}
+
+		fmt.Printf("Generated %d %s/RUB rates using CBR USD rates\n", len(result), cryptoSymbol)
+
+		if len(result) > 0 {
+			fmt.Printf("First result: Symbol=%s, Timestamp=%s\n",
+				result[0].Symbol,
+				result[0].Timestamp.Format("2006-01-02 15:04:05"))
+		}
+
+		return result, nil
 	}
 
 	fmt.Printf("Got %d USDT/RUB rates\n", len(usdtRubRates))

@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
+	currency "github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 	"github.com/casualdoto/go-currency-tracker/internal/storage"
 )
 
@@ -24,7 +24,7 @@ func NewCurrencyRateScheduler(db *storage.PostgresDB, hourUTC, minuteUTC int) *C
 	now := time.Now().UTC()
 	jobTime := time.Date(now.Year(), now.Month(), now.Day(), hourUTC, minuteUTC, 0, 0, time.UTC)
 
-	// Если текущее время уже прошло, сдвигаем на следующий день
+	// If current time has already passed, move to the next day
 	for now.After(jobTime) {
 		jobTime = jobTime.Add(24 * time.Hour)
 	}
