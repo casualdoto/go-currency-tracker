@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
+	"log"
+	"github.com/joho/godotenv"
 )
 
 // Structures for parsing API response
@@ -24,7 +27,19 @@ type Valute struct {
 	Previous float64 `json:"Previous"`
 }
 
-var CBRBaseURL = "https://www.cbr-xml-daily.ru"
+// CBRBaseURL is the base URL for CBR API, initialized from environment variable
+var CBRBaseURL string
+
+func init() {
+	// Load .env file if it exists
+	_ = godotenv.Load()
+
+	// Get base URL from environment
+	CBRBaseURL = os.Getenv("CBR_BASE_URL")
+	if CBRBaseURL == "" {
+		log.Fatal("CBR_BASE_URL is not set. Please specify it in the environment or .env file.")
+	}
+}
 
 // Get rates from the CBR site for the current date
 func GetCBRRates() (*DailyRates, error) {
@@ -72,7 +87,7 @@ func GetCBRRatesByDate(date string) (*DailyRates, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&rates); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return &rates, nil
 }
 
