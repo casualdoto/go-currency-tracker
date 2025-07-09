@@ -22,11 +22,12 @@ type Subscription struct {
 
 // TelegramBot represents a Telegram bot instance
 type TelegramBot struct {
-	bot           *telebot.Bot
-	subscriptions map[int][]string // UserID -> []Currency (in-memory cache)
-	cryptoSubs    map[int][]string // UserID -> []CryptoSymbol (in-memory cache)
-	mu            sync.RWMutex
-	db            *storage.PostgresDB
+	bot              *telebot.Bot
+	subscriptions    map[int][]string   // UserID -> []Currency (in-memory cache)
+	cryptoSubs       map[int][]string   // UserID -> []CryptoSymbol (in-memory cache)
+	lastCryptoPrices map[string]float64 // Symbol -> Last price for change calculation
+	mu               sync.RWMutex
+	db               *storage.PostgresDB
 }
 
 // NewTelegramBot creates a new Telegram bot instance
@@ -59,11 +60,12 @@ func NewTelegramBot(token string, db *storage.PostgresDB) (*TelegramBot, error) 
 	}
 
 	return &TelegramBot{
-		bot:           bot,
-		subscriptions: subscriptions,
-		cryptoSubs:    cryptoSubs,
-		mu:            sync.RWMutex{},
-		db:            db,
+		bot:              bot,
+		subscriptions:    subscriptions,
+		cryptoSubs:       cryptoSubs,
+		lastCryptoPrices: make(map[string]float64),
+		mu:               sync.RWMutex{},
+		db:               db,
 	}, nil
 }
 
@@ -73,15 +75,97 @@ func (t *TelegramBot) Start() {
 	t.bot.Handle("/start", func(m *telebot.Message) {
 		msg := "Welcome to Currency Tracker Bot!\n\n" +
 			"Available commands:\n" +
+			"/currencies - Get list of available currencies\n" +
 			"/subscribe [currency] - Subscribe to currency updates (e.g., /subscribe USD)\n" +
 			"/unsubscribe [currency] - Unsubscribe from currency updates (e.g., /unsubscribe USD)\n" +
 			"/list - List your subscriptions\n" +
 			"/rate [currency] - Get current rate for a currency (e.g., /rate USD)\n\n" +
 			"Cryptocurrency commands:\n" +
+			"/cryptocurrencies - Get list of available cryptocurrencies\n" +
 			"/crypto_subscribe [symbol] - Subscribe to crypto updates (e.g., /crypto_subscribe BTC)\n" +
 			"/crypto_unsubscribe [symbol] - Unsubscribe from crypto updates (e.g., /crypto_unsubscribe BTC)\n" +
 			"/crypto_list - List your crypto subscriptions\n" +
 			"/crypto_rate [symbol] - Get current rate for a cryptocurrency (e.g., /crypto_rate BTC)"
+
+		t.bot.Send(m.Sender, msg)
+	})
+
+	// Handle /currencies command
+	t.bot.Handle("/currencies", func(m *telebot.Message) {
+		// Get available currencies from CBR
+		rates, err := currency.GetCBRRatesByDate("")
+		if err != nil {
+			t.bot.Send(m.Sender, "Failed to retrieve available currencies. Please try again later.")
+			return
+		}
+
+		msg := "📋 Available Currencies:\n\n"
+
+		// Sort currencies by code
+		type currencyInfo struct {
+			code string
+			name string
+		}
+
+		var currencies []currencyInfo
+		for code, rate := range rates.Valute {
+			currencies = append(currencies, currencyInfo{code: code, name: rate.Name})
+		}
+
+		// Simple sorting by code
+		for i := 0; i < len(currencies)-1; i++ {
+			for j := i + 1; j < len(currencies); j++ {
+				if currencies[i].code > currencies[j].code {
+					currencies[i], currencies[j] = currencies[j], currencies[i]
+				}
+			}
+		}
+
+		for _, curr := range currencies {
+			msg += fmt.Sprintf("💱 %s - %s\n", curr.code, curr.name)
+		}
+
+		msg += "\nUse /subscribe [currency] to subscribe to updates"
+
+		t.bot.Send(m.Sender, msg)
+	})
+
+	// Handle /cryptocurrencies command
+	t.bot.Handle("/cryptocurrencies", func(m *telebot.Message) {
+		msg := "🪙 Available Cryptocurrencies:\n\n"
+
+		// Fixed list of popular cryptocurrencies
+		cryptocurrencies := []struct {
+			symbol string
+			name   string
+		}{
+			{"BTC", "Bitcoin"},
+			{"ETH", "Ethereum"},
+			{"BNB", "Binance Coin"},
+			{"SOL", "Solana"},
+			{"XRP", "XRP"},
+			{"ADA", "Cardano"},
+			{"AVAX", "Avalanche"},
+			{"DOT", "Polkadot"},
+			{"DOGE", "Dogecoin"},
+			{"SHIB", "Shiba Inu"},
+			{"LINK", "Chainlink"},
+			{"MATIC", "Polygon"},
+			{"UNI", "Uniswap"},
+			{"LTC", "Litecoin"},
+			{"ATOM", "Cosmos"},
+			{"XTZ", "Tezos"},
+			{"FIL", "Filecoin"},
+			{"TRX", "TRON"},
+			{"ETC", "Ethereum Classic"},
+			{"NEAR", "NEAR Protocol"},
+		}
+
+		for _, crypto := range cryptocurrencies {
+			msg += fmt.Sprintf("₿ %s - %s\n", crypto.symbol, crypto.name)
+		}
+
+		msg += "\nUse /crypto_subscribe [symbol] to subscribe to updates"
 
 		t.bot.Send(m.Sender, msg)
 	})
@@ -519,6 +603,143 @@ func (t *TelegramBot) SendDailyUpdates() {
 		_, err := t.bot.Send(user, msg)
 		if err != nil {
 			log.Printf("Error sending crypto message to user %d: %v", userID, err)
+		}
+	}
+}
+
+// SendCryptoUpdates sends 15-minute crypto updates to all subscribers
+func (t *TelegramBot) SendCryptoUpdates() {
+	// Refresh crypto subscriptions from database
+	cryptoSubs, err := t.db.GetAllTelegramCryptoSubscriptions()
+	if err != nil {
+		log.Printf("Error refreshing crypto subscriptions from database: %v", err)
+		// Continue with in-memory cache if available
+	} else {
+		t.mu.Lock()
+		t.cryptoSubs = cryptoSubs
+		t.mu.Unlock()
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Collect all unique symbols to fetch
+	allSymbols := make(map[string]bool)
+	for _, symbols := range t.cryptoSubs {
+		for _, symbol := range symbols {
+			allSymbols[symbol] = true
+		}
+	}
+
+	if len(allSymbols) == 0 {
+		return
+	}
+
+	// Get current rates for all symbols
+	client := binance.NewClient()
+	now := time.Now()
+	currentPrices := make(map[string]*binance.CryptoRate)
+
+	for symbol := range allSymbols {
+		rate, err := client.GetCryptoToRubRate(symbol, now)
+		if err != nil {
+			log.Printf("Error getting crypto rate for %s: %v", symbol, err)
+			continue
+		}
+		currentPrices[symbol] = rate
+	}
+
+	// Send updates to each user
+	for userID, symbols := range t.cryptoSubs {
+		if len(symbols) == 0 {
+			continue
+		}
+
+		hasSignificantChange := false
+		msg := "📊 Crypto Update 📊\n\n"
+
+		// Get crypto names map
+		cryptoNames := map[string]string{
+			"BTC":   "Bitcoin",
+			"ETH":   "Ethereum",
+			"BNB":   "Binance Coin",
+			"SOL":   "Solana",
+			"ADA":   "Cardano",
+			"XRP":   "XRP",
+			"DOT":   "Polkadot",
+			"DOGE":  "Dogecoin",
+			"SHIB":  "Shiba Inu",
+			"MATIC": "Polygon",
+			"AVAX":  "Avalanche",
+			"LINK":  "Chainlink",
+			"UNI":   "Uniswap",
+			"LTC":   "Litecoin",
+			"ATOM":  "Cosmos",
+			"XTZ":   "Tezos",
+			"FIL":   "Filecoin",
+			"TRX":   "TRON",
+			"ETC":   "Ethereum Classic",
+			"NEAR":  "NEAR Protocol",
+		}
+
+		for _, symbol := range symbols {
+			rate, exists := currentPrices[symbol]
+			if !exists {
+				continue
+			}
+
+			cryptoName := cryptoNames[symbol]
+			if cryptoName == "" {
+				cryptoName = symbol
+			}
+
+			currentPrice := rate.Close
+			lastPrice, hadPrevious := t.lastCryptoPrices[symbol]
+
+			if hadPrevious {
+				// Calculate change percentage
+				changePercent := ((currentPrice - lastPrice) / lastPrice) * 100
+				changeEmoji := "🔄"
+
+				// Only show notification if change is significant (>= 2%)
+				if changePercent >= 2.0 {
+					changeEmoji = "📈"
+					hasSignificantChange = true
+				} else if changePercent <= -2.0 {
+					changeEmoji = "📉"
+					hasSignificantChange = true
+				} else if changePercent == 0 {
+					changeEmoji = "🔄"
+				} else {
+					// Small change, still show but mark as insignificant
+					if changePercent > 0 {
+						changeEmoji = "📈"
+					} else {
+						changeEmoji = "📉"
+					}
+				}
+
+				// Add to message
+				msg += fmt.Sprintf("%s %s (%s): %.2f ₽ (%+.2f%%)\n",
+					changeEmoji, cryptoName, symbol, currentPrice, changePercent)
+			} else {
+				// First time seeing this crypto
+				msg += fmt.Sprintf("💲 %s (%s): %.2f ₽ (new)\n",
+					cryptoName, symbol, currentPrice)
+				hasSignificantChange = true
+			}
+
+			// Update last price
+			t.lastCryptoPrices[symbol] = currentPrice
+		}
+
+		// Only send message if there are significant changes (>= 2%) or it's first time
+		if hasSignificantChange {
+			user := &telebot.User{ID: userID}
+			_, err := t.bot.Send(user, msg)
+			if err != nil {
+				log.Printf("Error sending crypto update to user %d: %v", userID, err)
+			}
 		}
 	}
 }

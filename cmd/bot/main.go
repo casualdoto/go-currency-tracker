@@ -56,12 +56,16 @@ func main() {
 	bot.Start()
 	log.Println("Telegram bot started")
 
-	// Create a scheduler for daily updates at 14:00 UTC
+	// Create a scheduler for daily updates at 2:00 UTC
 	sched := scheduler.NewTelegramScheduler(bot)
-	sched.StartDailyUpdates(14)
+	sched.StartDailyUpdates(2)
 	// for test
 	//sched.RunNow()
 	log.Println("Daily updates scheduler started")
+
+	// Start crypto updates every 15 minutes
+	sched.StartCryptoUpdates()
+	log.Println("Crypto updates scheduler started (15 minutes interval)")
 
 	// Wait for interrupt signal to gracefully shutdown
 	quit := make(chan os.Signal, 1)
