@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // DOM elements
+    const dataSourceSelect = document.getElementById('data-source');
     const currencySelect = document.getElementById('currency-select');
     const periodSelect = document.getElementById('period-select');
     const customPeriodDiv = document.getElementById('custom-period');
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const downloadExcelBtn = document.getElementById('download-excel');
     
     // Variables to store current analysis parameters
+    let currentDataSource = 'cbr';
     let currentCurrencyCode = '';
     let currentStartDate = '';
     let currentEndDate = '';
@@ -34,6 +36,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load currencies list when page loads
     loadCurrencies();
+    
+    // Data source change handler
+    dataSourceSelect.addEventListener('change', function() {
+        currentDataSource = this.value;
+        
+        // Clear current currency selection
+        currencySelect.innerHTML = '<option value="" selected disabled>Loading...</option>';
+        
+        // Reset form and chart
+        resetMetrics();
+        if (currencyChart) {
+            currencyChart.destroy();
+            currencyChart = null;
+        }
+        
+        // Update UI labels based on data source
+        updateUILabels();
+        
+        // Load appropriate data based on source
+        if (currentDataSource === 'cbr') {
+            loadCurrencies();
+        } else if (currentDataSource === 'crypto') {
+            loadCryptoSymbols();
+        }
+    });
     
     // Enable Excel download button when currency or period changes
     currencySelect.addEventListener('change', updateExcelDownloadButton);
@@ -137,8 +164,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentStartDate = formatDate(startDate);
                 currentEndDate = formatDate(endDate);
                 
-                // Load data for custom period
-                loadCurrencyHistoryCustom(currencyCode, startDate, endDate);
+                // Load data for custom period based on source
+                if (currentDataSource === 'cbr') {
+                    loadCurrencyHistoryCustom(currencyCode, startDate, endDate);
+                } else if (currentDataSource === 'crypto') {
+                    loadCryptoHistoryCustom(currencyCode, startDate, endDate);
+                }
             } else {
                 // Standard period
                 const period = periodSelect.value;
@@ -153,7 +184,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentStartDate = formatDate(startDate);
                 currentEndDate = formatDate(endDate);
                 
-                loadCurrencyHistory(currencyCode, period);
+                // Load data based on source
+                if (currentDataSource === 'cbr') {
+                    loadCurrencyHistory(currencyCode, period);
+                } else if (currentDataSource === 'crypto') {
+                    loadCryptoHistory(currencyCode, period);
+                }
             }
         }
     });
@@ -161,8 +197,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Excel download button handler
     downloadExcelBtn.addEventListener('click', function() {
         if (currentCurrencyCode && currentStartDate && currentEndDate) {
-            const excelUrl = `/rates/cbr/history/range/excel?code=${currentCurrencyCode}&start_date=${currentStartDate}&end_date=${currentEndDate}`;
-            window.location.href = excelUrl;
+            let excelUrl;
+            if (currentDataSource === 'cbr') {
+                excelUrl = `/rates/cbr/history/range/excel?code=${currentCurrencyCode}&start_date=${currentStartDate}&end_date=${currentEndDate}`;
+            } else if (currentDataSource === 'crypto') {
+                excelUrl = `/rates/crypto/history/range/excel?symbol=${currentCurrencyCode}&start_date=${currentStartDate}&end_date=${currentEndDate}`;
+            }
+            
+            if (excelUrl) {
+                window.location.href = excelUrl;
+            }
         }
     });
     
@@ -217,6 +261,68 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error loading currencies list:', error);
             alert('Failed to load currencies list. Please try again later.');
+        }
+    }
+    
+    // Load available crypto symbols - using fixed list of popular cryptocurrencies
+    async function loadCryptoSymbols() {
+        try {
+            // Fixed list of popular cryptocurrencies
+            const popularCryptos = [
+                { symbol: 'BTC', name: 'Bitcoin' },
+                { symbol: 'ETH', name: 'Ethereum' },
+                { symbol: 'BNB', name: 'Binance Coin' },
+                { symbol: 'SOL', name: 'Solana' },
+                { symbol: 'XRP', name: 'XRP' },
+                { symbol: 'ADA', name: 'Cardano' },
+                { symbol: 'AVAX', name: 'Avalanche' },
+                { symbol: 'DOT', name: 'Polkadot' },
+                { symbol: 'DOGE', name: 'Dogecoin' },
+                { symbol: 'SHIB', name: 'Shiba Inu' },
+                { symbol: 'LINK', name: 'Chainlink' },
+                { symbol: 'MATIC', name: 'Polygon' },
+                { symbol: 'UNI', name: 'Uniswap' },
+                { symbol: 'LTC', name: 'Litecoin' },
+                { symbol: 'ATOM', name: 'Cosmos' },
+                { symbol: 'XTZ', name: 'Tezos' },
+                { symbol: 'FIL', name: 'Filecoin' },
+                { symbol: 'TRX', name: 'TRON' },
+                { symbol: 'ETC', name: 'Ethereum Classic' },
+                { symbol: 'NEAR', name: 'NEAR Protocol' }
+            ];
+            
+            // Clear dropdown
+            currencySelect.innerHTML = '';
+            
+            // Store crypto data globally for later use
+            window.cryptoData = {};
+            
+            popularCryptos.forEach(crypto => {
+                const option = document.createElement('option');
+                option.value = crypto.symbol;
+                option.textContent = `${crypto.name} (${crypto.symbol})`;
+                
+                // Store symbol data for later use
+                window.cryptoData[crypto.symbol] = {
+                    name: crypto.name,
+                    symbol: crypto.symbol,
+                    type: 'crypto'
+                };
+                
+                currencySelect.appendChild(option);
+            });
+            
+            // Select BTC by default
+            currencySelect.value = 'BTC';
+            
+            // Update Excel download button state
+            updateExcelDownloadButton();
+            
+            // Load data for BTC for a week by default
+            loadCryptoHistory('BTC', 7);
+        } catch (error) {
+            console.error('Error loading crypto symbols:', error);
+            alert('Failed to load crypto symbols. Please try again later.');
         }
     }
     
@@ -573,6 +679,198 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Load crypto historical data
+    async function loadCryptoHistory(symbol, days) {
+        try {
+            // Show loading indicator
+            resetMetrics();
+            if (currencyChart) {
+                currencyChart.destroy();
+                currencyChart = null;
+            }
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('d-none');
+            document.getElementById('currency-chart').classList.add('d-none');
+            document.getElementById('loading-progress').style.width = '10%';
+            document.getElementById('loading-status').textContent = 'Retrieving crypto data...';
+            
+            // Request to API for historical data
+            const response = await fetch(`/rates/crypto/history?symbol=${symbol}&days=${days}`);
+            const data = await response.json();
+            
+            console.log('Crypto history API response:', data);
+            
+            if (data.success && data.data && data.data.length > 0) {
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '50%';
+                document.getElementById('loading-status').textContent = 'Processing data...';
+                
+                // Extract dates and values from response
+                const history = data.data;
+                
+                // Sort by date (ascending)
+                history.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                console.log('Processing crypto history data, first item:', history[0]);
+                
+                const dates = history.map(item => {
+                    // Convert date format from "2006-01-02 15:04:05" to "2006-01-02"
+                    return item.date.split(' ')[0];
+                });
+                const values = history.map(item => item.close); // Use closing price (now in RUB)
+                
+                console.log('Processed dates:', dates.slice(0, 3), 'values:', values.slice(0, 3));
+                
+                // Crypto info for chart display
+                const cryptoInfo = {
+                    code: symbol,
+                    name: window.cryptoData[symbol]?.name || symbol,
+                    type: 'crypto',
+                    data: history // Store full OHLC data
+                };
+                
+                // Calculate metrics based on closing prices
+                calculateCryptoMetrics(history);
+                
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '100%';
+                document.getElementById('loading-status').textContent = 'Completed!';
+                
+                // Small delay to show the 100% progress
+                setTimeout(() => {
+                    // Hide loading indicator
+                    loadingIndicator.classList.add('d-none');
+                    document.getElementById('currency-chart').classList.remove('d-none');
+                    
+                    // Render chart with crypto data
+                    renderChart(dates, values, cryptoInfo);
+                }, 500);
+                
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
+            } else {
+                // Hide loading indicator
+                loadingIndicator.classList.add('d-none');
+                document.getElementById('currency-chart').classList.remove('d-none');
+                
+                // Disable Excel download button
+                downloadExcelBtn.disabled = true;
+                
+                console.log('No crypto data available:', data);
+                alert(`No crypto data available for ${symbol} for the selected period. Error: ${data.error || 'Unknown error'}`);
+                resetMetrics();
+            }
+        } catch (error) {
+            // Hide loading indicator in case of error
+            loadingIndicator.classList.add('d-none');
+            document.getElementById('currency-chart').classList.remove('d-none');
+            
+            // Disable Excel download button
+            downloadExcelBtn.disabled = true;
+            
+            console.error('Error loading crypto historical data:', error);
+            alert(`Failed to load crypto historical data for ${symbol}. Error: ${error.message}`);
+            resetMetrics();
+        }
+    }
+    
+    // Load crypto historical data for custom date range
+    async function loadCryptoHistoryCustom(symbol, startDate, endDate) {
+        try {
+            // Show loading indicator
+            resetMetrics();
+            if (currencyChart) {
+                currencyChart.destroy();
+                currencyChart = null;
+            }
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('d-none');
+            document.getElementById('currency-chart').classList.add('d-none');
+            document.getElementById('loading-progress').style.width = '10%';
+            document.getElementById('loading-status').textContent = 'Retrieving crypto data...';
+            
+            // Format dates for API request
+            const startDateStr = formatDate(startDate);
+            const endDateStr = formatDate(endDate);
+            
+            // Request to API for historical data using the new endpoint
+            const response = await fetch(`/rates/crypto/history/range?symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`);
+            const data = await response.json();
+            
+            console.log('Crypto history range API response:', data);
+            
+            if (data.success && data.data && data.data.length > 0) {
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '50%';
+                document.getElementById('loading-status').textContent = 'Processing data...';
+                
+                // Extract dates and values from response
+                const history = data.data;
+                
+                // Sort by date (ascending)
+                history.sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                const dates = history.map(item => {
+                    // Convert date format from "2006-01-02 15:04:05" to "2006-01-02"
+                    return item.date.split(' ')[0];
+                });
+                const values = history.map(item => item.close); // Use closing price (now in RUB)
+                
+                // Crypto info for chart display
+                const cryptoInfo = {
+                    code: symbol,
+                    name: window.cryptoData[symbol]?.name || symbol,
+                    type: 'crypto',
+                    data: history // Store full OHLC data
+                };
+                
+                // Calculate metrics based on closing prices
+                calculateCryptoMetrics(history);
+                
+                // Update loading progress
+                document.getElementById('loading-progress').style.width = '100%';
+                document.getElementById('loading-status').textContent = 'Completed!';
+                
+                // Small delay to show the 100% progress
+                setTimeout(() => {
+                    // Hide loading indicator
+                    loadingIndicator.classList.add('d-none');
+                    document.getElementById('currency-chart').classList.remove('d-none');
+                    
+                    // Render chart with crypto data
+                    renderChart(dates, values, cryptoInfo);
+                }, 500);
+                
+                // Enable Excel download button
+                downloadExcelBtn.disabled = false;
+            } else {
+                // Hide loading indicator
+                loadingIndicator.classList.add('d-none');
+                document.getElementById('currency-chart').classList.remove('d-none');
+                
+                // Disable Excel download button
+                downloadExcelBtn.disabled = true;
+                
+                console.log('No crypto data available for date range:', data);
+                alert(`No crypto data available for ${symbol} for the selected date range. Error: ${data.error || 'Unknown error'}`);
+                resetMetrics();
+            }
+        } catch (error) {
+            // Hide loading indicator in case of error
+            loadingIndicator.classList.add('d-none');
+            document.getElementById('currency-chart').classList.remove('d-none');
+            
+            // Disable Excel download button
+            downloadExcelBtn.disabled = true;
+            
+            console.error('Error loading crypto historical data for date range:', error);
+            alert(`Failed to load crypto historical data for ${symbol} date range. Error: ${error.message}`);
+            resetMetrics();
+        }
+    }
+    
     // Check if nominal changes in the historical data
     function checkNominalChanges(history) {
         if (!history || history.length <= 1) {
@@ -653,6 +951,55 @@ document.addEventListener('DOMContentLoaded', function() {
         metricVolatility.textContent = '-';
     }
     
+    // Update UI labels based on data source
+    function updateUILabels() {
+        const currencyLabel = document.querySelector('label[for="currency-select"]');
+        
+        if (currentDataSource === 'cbr') {
+            currencyLabel.textContent = 'Select Currency:';
+            currencySelect.innerHTML = '<option value="" selected disabled>Loading currencies...</option>';
+        } else if (currentDataSource === 'crypto') {
+            currencyLabel.textContent = 'Select Cryptocurrency:';
+            currencySelect.innerHTML = '<option value="" selected disabled>Loading cryptocurrencies...</option>';
+        }
+    }
+    
+    // Calculate metrics for crypto data
+    function calculateCryptoMetrics(history) {
+        if (history.length === 0) {
+            resetMetrics();
+            return;
+        }
+        
+        // Extract closing prices (now in RUB)
+        const closingPrices = history.map(item => item.close);
+        
+        // Calculate basic metrics
+        const avg = closingPrices.reduce((sum, val) => sum + val, 0) / closingPrices.length;
+        const min = Math.min(...closingPrices);
+        const max = Math.max(...closingPrices);
+        
+        // Standard deviation
+        const squaredDiffs = closingPrices.map(val => Math.pow(val - avg, 2));
+        const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / closingPrices.length;
+        const std = Math.sqrt(variance);
+        
+        // Volatility (coefficient of variation as percentage)
+        const volatility = (std / avg) * 100;
+        
+        // Format price in RUB
+        const formatPrice = (price) => {
+            return price.toFixed(2);
+        };
+        
+        // Update metrics display for crypto in RUB
+        metricAvg.textContent = `${formatPrice(avg)} ₽`;
+        metricStd.textContent = `${formatPrice(std)} ₽`;
+        metricMin.textContent = `${formatPrice(min)} ₽`;
+        metricMax.textContent = `${formatPrice(max)} ₽`;
+        metricVolatility.textContent = `${volatility.toFixed(2)}%`;
+    }
+    
     // Render currency rate chart
     function renderChart(dates, values, currencyInfo) {
         // If chart already exists, destroy it
@@ -660,17 +1007,55 @@ document.addEventListener('DOMContentLoaded', function() {
             currencyChart.destroy();
         }
         
-        // Get the correct form of currency name based on nominal
-        const currencyNameForm = getCurrencyNameForm(currencyInfo.name, currencyInfo.nominal);
+        // Check if this is crypto data
+        const isCrypto = currencyInfo.type === 'crypto';
         
-        // Create chart title with nominal information
-        let chartLabel = `${currencyInfo.nominal} ${currencyNameForm} to RUB`;
-        if (currencyInfo.nominalChanged) {
-            chartLabel += ' (normalized)';
+        let chartLabel, displayValues, yAxisLabel, tooltipCallback;
+        
+        if (isCrypto) {
+            // Crypto chart configuration
+            chartLabel = `${currencyInfo.code} Price (RUB)`;
+            displayValues = values; // Use values as-is for crypto (now in RUB)
+            yAxisLabel = 'Price (RUB)';
+            
+            tooltipCallback = function(context) {
+                const price = context.raw;
+                const formatPrice = (price) => {
+                    return price.toFixed(2);
+                };
+                return `Price: ${formatPrice(price)} ₽`;
+            };
+        } else {
+            // Traditional currency chart configuration
+            const currencyNameForm = getCurrencyNameForm(currencyInfo.name, currencyInfo.nominal);
+            
+            chartLabel = `${currencyInfo.nominal} ${currencyNameForm} to RUB`;
+            if (currencyInfo.nominalChanged) {
+                chartLabel += ' (normalized)';
+            }
+            
+            displayValues = values.map(value => value * currencyInfo.nominal);
+            yAxisLabel = 'Rate (₽)';
+            
+            tooltipCallback = function(context) {
+                let label = `Rate: ${context.raw.toFixed(4)} ₽ for ${currencyInfo.nominal} ${currencyNameForm}`;
+                
+                // Add information about normalization if nominal changed
+                if (currencyInfo.nominalChanged) {
+                    const originalDateIndex = chartDates.indexOf(context.label);
+                    if (originalDateIndex >= 0) {
+                        const originalDate = originalDates[originalDateIndex];
+                        const changeInfo = currencyInfo.nominalChangeDates.find(d => d.date === originalDate);
+                        
+                        if (changeInfo) {
+                            label += ` (Nominal changed: ${changeInfo.oldNominal} → ${changeInfo.newNominal})`;
+                        }
+                    }
+                }
+                
+                return label;
+            };
         }
-        
-        // Adjust values for display based on nominal
-        const displayValues = values.map(value => value * currencyInfo.nominal);
         
         // Format dates for better display
         const formattedDates = dates.map(formatDateForDisplay);
@@ -695,8 +1080,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 datasets: [{
                     label: chartLabel,
                     data: chartValues,
-                    borderColor: '#0d6efd',
-                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderColor: isCrypto ? '#ff6b35' : '#0d6efd',
+                    backgroundColor: isCrypto ? 'rgba(255, 107, 53, 0.1)' : 'rgba(13, 110, 253, 0.1)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.1
@@ -711,25 +1096,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
-                                let label = `Rate: ${context.raw.toFixed(4)} ₽ for ${currencyInfo.nominal} ${currencyNameForm}`;
-                                
-                                // Add information about normalization if nominal changed
-                                if (currencyInfo.nominalChanged) {
-                                    // Find if this date had a nominal change
-                                    const originalDateIndex = chartDates.indexOf(context.label);
-                                    if (originalDateIndex >= 0) {
-                                        const originalDate = originalDates[originalDateIndex];
-                                        const changeInfo = currencyInfo.nominalChangeDates.find(d => d.date === originalDate);
-                                        
-                                        if (changeInfo) {
-                                            label += ` (Nominal changed: ${changeInfo.oldNominal} → ${changeInfo.newNominal})`;
-                                        }
-                                    }
-                                }
-                                
-                                return label;
-                            }
+                            label: tooltipCallback
                         }
                     }
                 },
@@ -750,11 +1117,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     y: {
                         title: {
                             display: true,
-                            text: 'Rate (₽)'
+                            text: yAxisLabel
                         },
                         ticks: {
                             callback: function(value) {
-                                return value.toFixed(2) + ' ₽';
+                                if (isCrypto) {
+                                    return value.toFixed(2) + ' ₽';
+                                } else {
+                                    return value.toFixed(2) + ' ₽';
+                                }
                             }
                         },
                         // Add grid lines for better readability

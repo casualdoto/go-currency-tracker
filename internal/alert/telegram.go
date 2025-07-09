@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/casualdoto/go-currency-tracker/internal/currency/binance"
 	currency "github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
 	"github.com/casualdoto/go-currency-tracker/internal/storage"
 	"github.com/tucnak/telebot"
@@ -23,6 +24,7 @@ type Subscription struct {
 type TelegramBot struct {
 	bot           *telebot.Bot
 	subscriptions map[int][]string // UserID -> []Currency (in-memory cache)
+	cryptoSubs    map[int][]string // UserID -> []CryptoSymbol (in-memory cache)
 	mu            sync.RWMutex
 	db            *storage.PostgresDB
 }
@@ -49,9 +51,17 @@ func NewTelegramBot(token string, db *storage.PostgresDB) (*TelegramBot, error) 
 		return nil, fmt.Errorf("failed to load subscriptions from database: %w", err)
 	}
 
+	// Load crypto subscriptions from database
+	cryptoSubs, err := db.GetAllTelegramCryptoSubscriptions()
+	if err != nil {
+		log.Printf("Failed to load crypto subscriptions from database: %v", err)
+		cryptoSubs = make(map[int][]string)
+	}
+
 	return &TelegramBot{
 		bot:           bot,
 		subscriptions: subscriptions,
+		cryptoSubs:    cryptoSubs,
 		mu:            sync.RWMutex{},
 		db:            db,
 	}, nil
@@ -66,7 +76,12 @@ func (t *TelegramBot) Start() {
 			"/subscribe [currency] - Subscribe to currency updates (e.g., /subscribe USD)\n" +
 			"/unsubscribe [currency] - Unsubscribe from currency updates (e.g., /unsubscribe USD)\n" +
 			"/list - List your subscriptions\n" +
-			"/rate [currency] - Get current rate for a currency (e.g., /rate USD)"
+			"/rate [currency] - Get current rate for a currency (e.g., /rate USD)\n\n" +
+			"Cryptocurrency commands:\n" +
+			"/crypto_subscribe [symbol] - Subscribe to crypto updates (e.g., /crypto_subscribe BTC)\n" +
+			"/crypto_unsubscribe [symbol] - Unsubscribe from crypto updates (e.g., /crypto_unsubscribe BTC)\n" +
+			"/crypto_list - List your crypto subscriptions\n" +
+			"/crypto_rate [symbol] - Get current rate for a cryptocurrency (e.g., /crypto_rate BTC)"
 
 		t.bot.Send(m.Sender, msg)
 	})
@@ -216,6 +231,175 @@ func (t *TelegramBot) Start() {
 		t.bot.Send(m.Sender, msg)
 	})
 
+	// Handle /crypto_subscribe command
+	t.bot.Handle("/crypto_subscribe", func(m *telebot.Message) {
+		args := strings.Fields(m.Text)
+		if len(args) < 2 {
+			t.bot.Send(m.Sender, "Please specify a cryptocurrency symbol. Example: /crypto_subscribe BTC")
+			return
+		}
+
+		symbol := strings.ToUpper(args[1])
+
+		// Verify the cryptocurrency exists by trying to get its rate
+		client := binance.NewClient()
+		now := time.Now()
+		_, err := client.GetCryptoToRubRate(symbol, now)
+		if err != nil {
+			t.bot.Send(m.Sender, fmt.Sprintf("Cryptocurrency %s not found or unavailable: %v", symbol, err))
+			return
+		}
+
+		t.mu.Lock()
+		defer t.mu.Unlock()
+
+		// Check if user already has crypto subscriptions
+		symbols, exists := t.cryptoSubs[m.Sender.ID]
+		if !exists {
+			t.cryptoSubs[m.Sender.ID] = []string{symbol}
+		} else {
+			// Check if already subscribed
+			for _, s := range symbols {
+				if s == symbol {
+					t.bot.Send(m.Sender, fmt.Sprintf("You are already subscribed to %s", symbol))
+					return
+				}
+			}
+			t.cryptoSubs[m.Sender.ID] = append(symbols, symbol)
+		}
+
+		// Save to database
+		err = t.db.SaveTelegramCryptoSubscription(m.Sender.ID, symbol)
+		if err != nil {
+			log.Printf("Error saving crypto subscription to database: %v", err)
+			t.bot.Send(m.Sender, "Failed to save subscription. Please try again later.")
+			return
+		}
+
+		t.bot.Send(m.Sender, fmt.Sprintf("You have successfully subscribed to %s", symbol))
+	})
+
+	// Handle /crypto_unsubscribe command
+	t.bot.Handle("/crypto_unsubscribe", func(m *telebot.Message) {
+		args := strings.Fields(m.Text)
+		if len(args) < 2 {
+			t.bot.Send(m.Sender, "Please specify a cryptocurrency symbol. Example: /crypto_unsubscribe BTC")
+			return
+		}
+
+		symbol := strings.ToUpper(args[1])
+
+		t.mu.Lock()
+		defer t.mu.Unlock()
+
+		symbols, exists := t.cryptoSubs[m.Sender.ID]
+		if !exists {
+			t.bot.Send(m.Sender, "You don't have any cryptocurrency subscriptions")
+			return
+		}
+
+		found := false
+		newSymbols := []string{}
+		for _, s := range symbols {
+			if s != symbol {
+				newSymbols = append(newSymbols, s)
+			} else {
+				found = true
+			}
+		}
+
+		if !found {
+			t.bot.Send(m.Sender, fmt.Sprintf("You are not subscribed to %s", symbol))
+			return
+		}
+
+		// Delete from database
+		err := t.db.DeleteTelegramCryptoSubscription(m.Sender.ID, symbol)
+		if err != nil {
+			log.Printf("Error deleting crypto subscription from database: %v", err)
+			t.bot.Send(m.Sender, "Failed to unsubscribe. Please try again later.")
+			return
+		}
+
+		t.cryptoSubs[m.Sender.ID] = newSymbols
+		t.bot.Send(m.Sender, fmt.Sprintf("You have successfully unsubscribed from %s", symbol))
+	})
+
+	// Handle /crypto_list command
+	t.bot.Handle("/crypto_list", func(m *telebot.Message) {
+		// Get crypto subscriptions from database to ensure we have the latest data
+		symbols, err := t.db.GetTelegramCryptoSubscriptions(m.Sender.ID)
+		if err != nil {
+			log.Printf("Error getting crypto subscriptions from database: %v", err)
+			t.bot.Send(m.Sender, "Failed to retrieve your cryptocurrency subscriptions. Please try again later.")
+			return
+		}
+
+		if len(symbols) == 0 {
+			t.bot.Send(m.Sender, "You don't have any cryptocurrency subscriptions")
+			return
+		}
+
+		msg := "Your cryptocurrency subscriptions:\n"
+		for _, s := range symbols {
+			msg += "- " + s + "\n"
+		}
+
+		t.bot.Send(m.Sender, msg)
+
+		// Update in-memory cache
+		t.mu.Lock()
+		t.cryptoSubs[m.Sender.ID] = symbols
+		t.mu.Unlock()
+	})
+
+	// Handle /crypto_rate command
+	t.bot.Handle("/crypto_rate", func(m *telebot.Message) {
+		args := strings.Fields(m.Text)
+		if len(args) < 2 {
+			t.bot.Send(m.Sender, "Please specify a cryptocurrency symbol. Example: /crypto_rate BTC")
+			return
+		}
+
+		symbol := strings.ToUpper(args[1])
+
+		// Get current rate
+		client := binance.NewClient()
+		now := time.Now()
+		rate, err := client.GetCryptoToRubRate(symbol, now)
+		if err != nil {
+			t.bot.Send(m.Sender, fmt.Sprintf("Error getting rate for %s: %v", symbol, err))
+			return
+		}
+
+		// Get crypto name
+		cryptoNames := map[string]string{
+			"BTC":   "Bitcoin",
+			"ETH":   "Ethereum",
+			"BNB":   "Binance Coin",
+			"SOL":   "Solana",
+			"ADA":   "Cardano",
+			"XRP":   "Ripple",
+			"DOT":   "Polkadot",
+			"DOGE":  "Dogecoin",
+			"SHIB":  "Shiba Inu",
+			"MATIC": "Polygon",
+			"AVAX":  "Avalanche",
+		}
+		cryptoName := cryptoNames[symbol]
+		if cryptoName == "" {
+			cryptoName = symbol
+		}
+
+		// Format the message
+		msg := fmt.Sprintf("Cryptocurrency: %s (%s)\n", cryptoName, symbol)
+		msg += fmt.Sprintf("Current rate: %.2f RUB\n", rate.Close)
+		msg += fmt.Sprintf("24h High: %.2f RUB\n", rate.High)
+		msg += fmt.Sprintf("24h Low: %.2f RUB", rate.Low)
+
+		t.bot.Send(m.Sender, msg)
+	})
+
 	// Start the bot
 	go t.bot.Start()
 }
@@ -233,9 +417,21 @@ func (t *TelegramBot) SendDailyUpdates() {
 		t.mu.Unlock()
 	}
 
+	// Refresh crypto subscriptions from database
+	cryptoSubs, err := t.db.GetAllTelegramCryptoSubscriptions()
+	if err != nil {
+		log.Printf("Error refreshing crypto subscriptions from database: %v", err)
+		// Continue with in-memory cache if available
+	} else {
+		t.mu.Lock()
+		t.cryptoSubs = cryptoSubs
+		t.mu.Unlock()
+	}
+
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
+	// Send currency updates
 	for userID, currencies := range t.subscriptions {
 		if len(currencies) == 0 {
 			continue
@@ -248,32 +444,81 @@ func (t *TelegramBot) SendDailyUpdates() {
 			// Get current rate
 			rate, err := currency.GetCurrencyRate(code, "")
 			if err != nil {
-				log.Printf("Error getting current rate for %s: %v", code, err)
+				log.Printf("Error getting rate for %s: %v", code, err)
 				continue
 			}
 
-			// Format the message
-			msg += fmt.Sprintf("Currency: %s\n", rate.CharCode)
-			msg += fmt.Sprintf("Current rate: %.4f RUB (per %d unit)\n", rate.Value, rate.Nominal)
-			msg += fmt.Sprintf("Previous rate: %.4f RUB (per %d unit)\n", rate.Previous, rate.Nominal)
-
-			// Calculate change percentage with respect to nominal
-			currentValuePerUnit := rate.Value / float64(rate.Nominal)
-			previousValuePerUnit := rate.Previous / float64(rate.Nominal)
-
-			changePercent := ((currentValuePerUnit - previousValuePerUnit) / previousValuePerUnit) * 100
+			// Calculate change percentage
+			changePercent := ((rate.Value - rate.Previous) / rate.Previous) * 100
+			changeEmoji := "🔄"
 			if changePercent > 0 {
-				msg += fmt.Sprintf("Change: +%.2f%%\n\n", changePercent)
-			} else {
-				msg += fmt.Sprintf("Change: %.2f%%\n\n", changePercent)
+				changeEmoji = "📈"
+			} else if changePercent < 0 {
+				changeEmoji = "📉"
 			}
+
+			// Add to message
+			msg += fmt.Sprintf("%s %s (%s): %.4f RUB (%.2f%%)\n",
+				changeEmoji, rate.Name, rate.CharCode, rate.Value, changePercent)
 		}
 
-		// Send the message
+		// Send message
 		user := &telebot.User{ID: userID}
 		_, err := t.bot.Send(user, msg)
 		if err != nil {
-			log.Printf("Error sending daily update to user %d: %v", userID, err)
+			log.Printf("Error sending message to user %d: %v", userID, err)
+		}
+	}
+
+	// Send cryptocurrency updates
+	for userID, symbols := range t.cryptoSubs {
+		if len(symbols) == 0 {
+			continue
+		}
+
+		// Create a message for this user
+		msg := "💰 Daily Cryptocurrency Update 💰\n\n"
+
+		client := binance.NewClient()
+		now := time.Now()
+
+		for _, symbol := range symbols {
+			// Get current rate
+			rate, err := client.GetCryptoToRubRate(symbol, now)
+			if err != nil {
+				log.Printf("Error getting crypto rate for %s: %v", symbol, err)
+				continue
+			}
+
+			// Get crypto name
+			cryptoNames := map[string]string{
+				"BTC":   "Bitcoin",
+				"ETH":   "Ethereum",
+				"BNB":   "Binance Coin",
+				"SOL":   "Solana",
+				"ADA":   "Cardano",
+				"XRP":   "Ripple",
+				"DOT":   "Polkadot",
+				"DOGE":  "Dogecoin",
+				"SHIB":  "Shiba Inu",
+				"MATIC": "Polygon",
+				"AVAX":  "Avalanche",
+			}
+			cryptoName := cryptoNames[symbol]
+			if cryptoName == "" {
+				cryptoName = symbol
+			}
+
+			// Add to message
+			msg += fmt.Sprintf("💲 %s (%s): %.2f RUB\n",
+				cryptoName, symbol, rate.Close)
+		}
+
+		// Send message
+		user := &telebot.User{ID: userID}
+		_, err := t.bot.Send(user, msg)
+		if err != nil {
+			log.Printf("Error sending crypto message to user %d: %v", userID, err)
 		}
 	}
 }

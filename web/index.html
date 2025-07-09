@@ -23,6 +23,14 @@
                     <div class="card-body">
                         <form id="currency-form">
                             <div class="mb-3">
+                                <label for="data-source" class="form-label">Data Source:</label>
+                                <select class="form-select" id="data-source" required>
+                                    <option value="cbr" selected>Central Bank of Russia (CBR)</option>
+                                    <option value="crypto">Cryptocurrency (Binance)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label for="currency-select" class="form-label">Select Currency:</label>
                                 <select class="form-select" id="currency-select" required>
                                     <option value="" selected disabled>Loading currencies...</option>
@@ -77,6 +85,7 @@
                             <li>Subscribe to multiple currencies</li>
                             <li>Compare with previous day rates</li>
                             <li>Get instant rates on demand</li>
+                            <li>Cryptocurrency rates available</li>
                         </ul>
                         <div class="d-grid">
                             <a href="https://t.me/CurrencyObsBot" target="_blank" class="btn btn-info">

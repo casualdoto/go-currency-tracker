@@ -486,17 +486,24 @@ func (p *PostgresDB) GetAvailableCryptoSymbols() ([]string, error) {
 	return symbols, nil
 }
 
-// UpdateSchema updates the database schema
+// UpdateSchema initializes the database schema
 func (p *PostgresDB) UpdateSchema() error {
 	query := `
-	CREATE TABLE IF NOT EXISTS telegram_subscriptions (
+	CREATE TABLE IF NOT EXISTS currency_rates (
 		id SERIAL PRIMARY KEY,
-		user_id INTEGER NOT NULL,
-		currency VARCHAR(10) NOT NULL,
+		date DATE NOT NULL,
+		currency_code VARCHAR(3) NOT NULL,
+		currency_name VARCHAR(100) NOT NULL,
+		nominal INTEGER NOT NULL,
+		value DECIMAL(12, 4) NOT NULL,
+		previous DECIMAL(12, 4),
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		UNIQUE(user_id, currency)
+		UNIQUE(date, currency_code)
 	);
 	
+	CREATE INDEX IF NOT EXISTS idx_currency_rates_date ON currency_rates(date);
+	CREATE INDEX IF NOT EXISTS idx_currency_rates_code ON currency_rates(currency_code);
+
 	CREATE TABLE IF NOT EXISTS crypto_rates (
 		id SERIAL PRIMARY KEY,
 		timestamp BIGINT NOT NULL,
@@ -512,11 +519,27 @@ func (p *PostgresDB) UpdateSchema() error {
 	
 	CREATE INDEX IF NOT EXISTS idx_crypto_rates_timestamp ON crypto_rates(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_crypto_rates_symbol ON crypto_rates(symbol);
+
+	CREATE TABLE IF NOT EXISTS telegram_subscriptions (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL,
+		currency VARCHAR(10) NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(user_id, currency)
+	);
+
+	CREATE TABLE IF NOT EXISTS telegram_crypto_subscriptions (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER NOT NULL,
+		symbol VARCHAR(20) NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(user_id, symbol)
+	);
 	`
 
 	_, err := p.db.Exec(query)
 	if err != nil {
-		return fmt.Errorf("failed to update schema: %w", err)
+		return fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	return nil
@@ -621,4 +644,98 @@ func (p *PostgresDB) GetAllTelegramSubscriptions() (map[int][]string, error) {
 	}
 
 	return subscriptions, nil
+}
+
+// SaveTelegramCryptoSubscription saves a user's cryptocurrency subscription to the database
+func (p *PostgresDB) SaveTelegramCryptoSubscription(userID int, symbol string) error {
+	_, err := p.db.Exec(`
+		INSERT INTO telegram_crypto_subscriptions (user_id, symbol)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, symbol) DO NOTHING
+	`, userID, symbol)
+	if err != nil {
+		return fmt.Errorf("failed to save telegram crypto subscription: %w", err)
+	}
+	return nil
+}
+
+// DeleteTelegramCryptoSubscription deletes a user's cryptocurrency subscription from the database
+func (p *PostgresDB) DeleteTelegramCryptoSubscription(userID int, symbol string) error {
+	result, err := p.db.Exec(`
+		DELETE FROM telegram_crypto_subscriptions
+		WHERE user_id = $1 AND symbol = $2
+	`, userID, symbol)
+	if err != nil {
+		return fmt.Errorf("failed to delete telegram crypto subscription: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("subscription not found")
+	}
+
+	return nil
+}
+
+// GetTelegramCryptoSubscriptions retrieves a user's cryptocurrency subscriptions from the database
+func (p *PostgresDB) GetTelegramCryptoSubscriptions(userID int) ([]string, error) {
+	rows, err := p.db.Query(`
+		SELECT symbol
+		FROM telegram_crypto_subscriptions
+		WHERE user_id = $1
+		ORDER BY symbol
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query telegram crypto subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var symbols []string
+	for rows.Next() {
+		var symbol string
+		if err := rows.Scan(&symbol); err != nil {
+			return nil, fmt.Errorf("failed to scan symbol: %w", err)
+		}
+		symbols = append(symbols, symbol)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over symbols: %w", err)
+	}
+
+	return symbols, nil
+}
+
+// GetAllTelegramCryptoSubscriptions retrieves all cryptocurrency subscriptions from the database
+func (p *PostgresDB) GetAllTelegramCryptoSubscriptions() (map[int][]string, error) {
+	rows, err := p.db.Query(`
+		SELECT user_id, symbol
+		FROM telegram_crypto_subscriptions
+		ORDER BY user_id, symbol
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all telegram crypto subscriptions: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[int][]string)
+	for rows.Next() {
+		var userID int
+		var symbol string
+		if err := rows.Scan(&userID, &symbol); err != nil {
+			return nil, fmt.Errorf("failed to scan subscription: %w", err)
+		}
+
+		result[userID] = append(result[userID], symbol)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over subscriptions: %w", err)
+	}
+
+	return result, nil
 }
