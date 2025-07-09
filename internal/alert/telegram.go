@@ -325,10 +325,9 @@ func (t *TelegramBot) Start() {
 
 		symbol := strings.ToUpper(args[1])
 
-		// Verify the cryptocurrency exists by trying to get its rate
+		// Verify the cryptocurrency exists by trying to get its current rate
 		client := binance.NewClient()
-		now := time.Now()
-		_, err := client.GetCryptoToRubRate(symbol, now)
+		_, err := client.GetCurrentCryptoToRubRate(symbol)
 		if err != nil {
 			t.bot.Send(m.Sender, fmt.Sprintf("Cryptocurrency %s not found or unavailable: %v", symbol, err))
 			return
@@ -449,8 +448,7 @@ func (t *TelegramBot) Start() {
 
 		// Get current rate
 		client := binance.NewClient()
-		now := time.Now()
-		rate, err := client.GetCryptoToRubRate(symbol, now)
+		rate, err := client.GetCurrentCryptoToRubRate(symbol)
 		if err != nil {
 			t.bot.Send(m.Sender, fmt.Sprintf("Error getting rate for %s: %v", symbol, err))
 			return
@@ -564,11 +562,10 @@ func (t *TelegramBot) SendDailyUpdates() {
 		msg := "💰 Daily Cryptocurrency Update 💰\n\n"
 
 		client := binance.NewClient()
-		now := time.Now()
 
 		for _, symbol := range symbols {
 			// Get current rate
-			rate, err := client.GetCryptoToRubRate(symbol, now)
+			rate, err := client.GetCurrentCryptoToRubRate(symbol)
 			if err != nil {
 				log.Printf("Error getting crypto rate for %s: %v", symbol, err)
 				continue
@@ -637,11 +634,10 @@ func (t *TelegramBot) SendCryptoUpdates() {
 
 	// Get current rates for all symbols
 	client := binance.NewClient()
-	now := time.Now()
 	currentPrices := make(map[string]*binance.CryptoRate)
 
 	for symbol := range allSymbols {
-		rate, err := client.GetCryptoToRubRate(symbol, now)
+		rate, err := client.GetCurrentCryptoToRubRate(symbol)
 		if err != nil {
 			log.Printf("Error getting crypto rate for %s: %v", symbol, err)
 			continue

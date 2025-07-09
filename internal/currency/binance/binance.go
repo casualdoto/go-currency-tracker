@@ -3,7 +3,10 @@ package binance
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -44,8 +47,32 @@ type Client struct {
 
 // NewClient creates a new Binance API client
 func NewClient() *Client {
+	// Create a custom HTTP client with increased timeouts
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       60 * time.Second,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false,
+			},
+		},
+	}
+
 	// Initialize with empty API keys as we're only using public endpoints
 	client := binance.NewClient("", "")
+
+	// Set the custom HTTP client
+	client.HTTPClient = httpClient
+
 	return &Client{
 		client: client,
 	}
@@ -57,43 +84,61 @@ func (c *Client) GetHistoricalKlines(symbol string, interval KlineInterval, star
 	startTimeMs := startTime.UnixMilli()
 	endTimeMs := endTime.UnixMilli()
 
-	// Make API call
-	klines, err := c.client.NewKlinesService().
-		Symbol(symbol).
-		Interval(string(interval)).
-		StartTime(startTimeMs).
-		EndTime(endTimeMs).
-		Limit(1000). // Maximum allowed by Binance API
-		Do(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get historical klines: %w", err)
+	// Retry logic for network issues
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Make API call
+		klines, err := c.client.NewKlinesService().
+			Symbol(symbol).
+			Interval(string(interval)).
+			StartTime(startTimeMs).
+			EndTime(endTimeMs).
+			Limit(1000). // Maximum allowed by Binance API
+			Do(context.Background())
+		if err != nil {
+			lastErr = err
+			fmt.Printf("Attempt %d failed for %s: %v\n", attempt+1, symbol, err)
+
+			// Wait before retry (exponential backoff)
+			if attempt < maxRetries-1 {
+				waitTime := time.Duration(1<<attempt) * time.Second
+				fmt.Printf("Waiting %v before retry...\n", waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+			return nil, fmt.Errorf("failed to get historical klines after %d attempts: %w", maxRetries, lastErr)
+		}
+
+		// Parse response
+		rates := make([]CryptoRate, 0, len(klines))
+		for _, kline := range klines {
+			// Convert timestamp from milliseconds to time.Time
+			timestamp := time.Unix(0, kline.OpenTime*int64(time.Millisecond))
+
+			// Parse price values
+			open, _ := strconv.ParseFloat(kline.Open, 64)
+			high, _ := strconv.ParseFloat(kline.High, 64)
+			low, _ := strconv.ParseFloat(kline.Low, 64)
+			close, _ := strconv.ParseFloat(kline.Close, 64)
+			volume, _ := strconv.ParseFloat(kline.Volume, 64)
+
+			rates = append(rates, CryptoRate{
+				Symbol:    symbol,
+				Timestamp: timestamp,
+				Open:      open,
+				High:      high,
+				Low:       low,
+				Close:     close,
+				Volume:    volume,
+			})
+		}
+
+		return rates, nil
 	}
 
-	// Parse response
-	rates := make([]CryptoRate, 0, len(klines))
-	for _, kline := range klines {
-		// Convert timestamp from milliseconds to time.Time
-		timestamp := time.Unix(0, kline.OpenTime*int64(time.Millisecond))
-
-		// Parse price values
-		open, _ := strconv.ParseFloat(kline.Open, 64)
-		high, _ := strconv.ParseFloat(kline.High, 64)
-		low, _ := strconv.ParseFloat(kline.Low, 64)
-		close, _ := strconv.ParseFloat(kline.Close, 64)
-		volume, _ := strconv.ParseFloat(kline.Volume, 64)
-
-		rates = append(rates, CryptoRate{
-			Symbol:    symbol,
-			Timestamp: timestamp,
-			Open:      open,
-			High:      high,
-			Low:       low,
-			Close:     close,
-			Volume:    volume,
-		})
-	}
-
-	return rates, nil
+	return nil, fmt.Errorf("failed to get historical klines: %w", lastErr)
 }
 
 // GetCryptoToRubRate calculates the rate of a cryptocurrency to RUB
@@ -368,6 +413,108 @@ func (c *Client) GetHistoricalCryptoToRubRates(cryptoSymbol string, interval Kli
 	}
 
 	return result, nil
+}
+
+// GetCurrentPrice gets current price for a symbol (24hr ticker)
+func (c *Client) GetCurrentPrice(symbol string) (*CryptoRate, error) {
+	// Retry logic for network issues
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Get 24hr ticker statistics
+		ticker, err := c.client.NewListPriceChangeStatsService().
+			Symbol(symbol).
+			Do(context.Background())
+		if err != nil {
+			lastErr = err
+			fmt.Printf("Attempt %d failed for %s ticker: %v\n", attempt+1, symbol, err)
+
+			// Wait before retry (exponential backoff)
+			if attempt < maxRetries-1 {
+				waitTime := time.Duration(1<<attempt) * time.Second
+				fmt.Printf("Waiting %v before retry...\n", waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+			return nil, fmt.Errorf("failed to get current price after %d attempts: %w", maxRetries, lastErr)
+		}
+
+		if len(ticker) == 0 {
+			return nil, fmt.Errorf("no ticker data available for %s", symbol)
+		}
+
+		// Parse the first ticker result
+		t := ticker[0]
+		openPrice, _ := strconv.ParseFloat(t.OpenPrice, 64)
+		highPrice, _ := strconv.ParseFloat(t.HighPrice, 64)
+		lowPrice, _ := strconv.ParseFloat(t.LowPrice, 64)
+		lastPrice, _ := strconv.ParseFloat(t.LastPrice, 64)
+		volume, _ := strconv.ParseFloat(t.Volume, 64)
+
+		return &CryptoRate{
+			Symbol:    symbol,
+			Timestamp: time.Now(),
+			Open:      openPrice,
+			High:      highPrice,
+			Low:       lowPrice,
+			Close:     lastPrice,
+			Volume:    volume,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("failed to get current price: %w", lastErr)
+}
+
+// GetCurrentCryptoToRubRate gets current cryptocurrency to RUB rate
+func (c *Client) GetCurrentCryptoToRubRate(cryptoSymbol string) (*CryptoRate, error) {
+	// Get crypto/USDT current price
+	cryptoUsdtRate, err := c.GetCurrentPrice(cryptoSymbol + "USDT")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s/USDT current price: %w", cryptoSymbol, err)
+	}
+
+	// Get USDT/RUB current price
+	usdtRubRate, err := c.GetCurrentPrice("USDTRUB")
+	if err != nil {
+		// If failed to get USDT/RUB rate from Binance, use USD rate from CBR
+		fmt.Printf("Error getting USDT/RUB current price: %v\n", err)
+		fmt.Printf("Falling back to CBR USD rate\n")
+
+		// Get current USD rate from CBR
+		usdRate, err := cbr.GetCurrencyRate("USD", "")
+		if err != nil || usdRate == nil {
+			return nil, fmt.Errorf("failed to get USD/RUB rate from CBR: %w", err)
+		}
+
+		fmt.Printf("Got current USD rate from CBR: %.4f RUB\n", usdRate.Value)
+
+		// Calculate crypto/RUB rate using CBR USD rate
+		cryptoRubRate := CryptoRate{
+			Symbol:    cryptoSymbol + "/RUB",
+			Timestamp: time.Now(),
+			Open:      cryptoUsdtRate.Open * usdRate.Value,
+			High:      cryptoUsdtRate.High * usdRate.Value,
+			Low:       cryptoUsdtRate.Low * usdRate.Value,
+			Close:     cryptoUsdtRate.Close * usdRate.Value,
+			Volume:    cryptoUsdtRate.Volume,
+		}
+
+		return &cryptoRubRate, nil
+	}
+
+	// Calculate crypto/RUB rate using USDT/RUB rate
+	cryptoRubRate := CryptoRate{
+		Symbol:    cryptoSymbol + "/RUB",
+		Timestamp: time.Now(),
+		Open:      cryptoUsdtRate.Open * usdtRubRate.Open,
+		High:      cryptoUsdtRate.High * usdtRubRate.High,
+		Low:       cryptoUsdtRate.Low * usdtRubRate.Low,
+		Close:     cryptoUsdtRate.Close * usdtRubRate.Close,
+		Volume:    cryptoUsdtRate.Volume,
+	}
+
+	return &cryptoRubRate, nil
 }
 
 // Helper function to get absolute value of time.Duration
