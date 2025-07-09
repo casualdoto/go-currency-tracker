@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/casualdoto/go-currency-tracker/internal/alert"
+	"github.com/casualdoto/go-currency-tracker/internal/currency/binance"
 	"github.com/casualdoto/go-currency-tracker/internal/scheduler"
 	"github.com/casualdoto/go-currency-tracker/internal/storage"
 	"github.com/joho/godotenv"
@@ -55,6 +56,26 @@ func main() {
 	// Start the bot
 	bot.Start()
 	log.Println("Telegram bot started")
+
+	// Test crypto rates functionality
+	log.Println("Testing crypto rates...")
+	testClient := binance.NewClient()
+
+	// Test BTC
+	btcRate, err := testClient.GetCurrentCryptoToRubRate("BTC")
+	if err != nil {
+		log.Printf("Error getting BTC rate: %v", err)
+	} else {
+		log.Printf("BTC rate test: %.2f RUB", btcRate.Close)
+	}
+
+	// Test DOGE
+	dogeRate, err := testClient.GetCurrentCryptoToRubRate("DOGE")
+	if err != nil {
+		log.Printf("Error getting DOGE rate: %v", err)
+	} else {
+		log.Printf("DOGE rate test: %.2f RUB", dogeRate.Close)
+	}
 
 	// Create a scheduler for daily updates at 2:00 UTC
 	sched := scheduler.NewTelegramScheduler(bot)

@@ -571,6 +571,8 @@ func (t *TelegramBot) SendDailyUpdates() {
 				continue
 			}
 
+			log.Printf("SendDailyUpdates: Got rate for %s: Close=%.2f RUB", symbol, rate.Close)
+
 			// Get crypto name
 			cryptoNames := map[string]string{
 				"BTC":   "Bitcoin",

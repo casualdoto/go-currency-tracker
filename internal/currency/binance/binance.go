@@ -446,13 +446,14 @@ func (c *Client) GetCurrentPrice(symbol string) (*CryptoRate, error) {
 
 		// Parse the first ticker result
 		t := ticker[0]
+
 		openPrice, _ := strconv.ParseFloat(t.OpenPrice, 64)
 		highPrice, _ := strconv.ParseFloat(t.HighPrice, 64)
 		lowPrice, _ := strconv.ParseFloat(t.LowPrice, 64)
 		lastPrice, _ := strconv.ParseFloat(t.LastPrice, 64)
 		volume, _ := strconv.ParseFloat(t.Volume, 64)
 
-		return &CryptoRate{
+		result := &CryptoRate{
 			Symbol:    symbol,
 			Timestamp: time.Now(),
 			Open:      openPrice,
@@ -460,7 +461,9 @@ func (c *Client) GetCurrentPrice(symbol string) (*CryptoRate, error) {
 			Low:       lowPrice,
 			Close:     lastPrice,
 			Volume:    volume,
-		}, nil
+		}
+
+		return result, nil
 	}
 
 	return nil, fmt.Errorf("failed to get current price: %w", lastErr)
@@ -474,45 +477,30 @@ func (c *Client) GetCurrentCryptoToRubRate(cryptoSymbol string) (*CryptoRate, er
 		return nil, fmt.Errorf("failed to get %s/USDT current price: %w", cryptoSymbol, err)
 	}
 
-	// Get USDT/RUB current price
-	usdtRubRate, err := c.GetCurrentPrice("USDTRUB")
-	if err != nil {
-		// If failed to get USDT/RUB rate from Binance, use USD rate from CBR
-		fmt.Printf("Error getting USDT/RUB current price: %v\n", err)
-		fmt.Printf("Falling back to CBR USD rate\n")
-
-		// Get current USD rate from CBR
-		usdRate, err := cbr.GetCurrencyRate("USD", "")
-		if err != nil || usdRate == nil {
-			return nil, fmt.Errorf("failed to get USD/RUB rate from CBR: %w", err)
-		}
-
-		fmt.Printf("Got current USD rate from CBR: %.4f RUB\n", usdRate.Value)
-
-		// Calculate crypto/RUB rate using CBR USD rate
-		cryptoRubRate := CryptoRate{
-			Symbol:    cryptoSymbol + "/RUB",
-			Timestamp: time.Now(),
-			Open:      cryptoUsdtRate.Open * usdRate.Value,
-			High:      cryptoUsdtRate.High * usdRate.Value,
-			Low:       cryptoUsdtRate.Low * usdRate.Value,
-			Close:     cryptoUsdtRate.Close * usdRate.Value,
-			Volume:    cryptoUsdtRate.Volume,
-		}
-
-		return &cryptoRubRate, nil
+	// Get current USD rate from CBR (USDT ≈ USD for conversion)
+	usdRate, err := cbr.GetCurrencyRate("USD", "")
+	if err != nil || usdRate == nil {
+		return nil, fmt.Errorf("failed to get USD/RUB rate from CBR: %w", err)
 	}
 
-	// Calculate crypto/RUB rate using USDT/RUB rate
+	// Check if USD rate is valid (not zero)
+	if usdRate.Value == 0 {
+		return nil, fmt.Errorf("USD rate from CBR is zero")
+	}
+
+	// Calculate crypto/RUB rate using CBR USD rate
 	cryptoRubRate := CryptoRate{
 		Symbol:    cryptoSymbol + "/RUB",
 		Timestamp: time.Now(),
-		Open:      cryptoUsdtRate.Open * usdtRubRate.Open,
-		High:      cryptoUsdtRate.High * usdtRubRate.High,
-		Low:       cryptoUsdtRate.Low * usdtRubRate.Low,
-		Close:     cryptoUsdtRate.Close * usdtRubRate.Close,
+		Open:      cryptoUsdtRate.Open * usdRate.Value,
+		High:      cryptoUsdtRate.High * usdRate.Value,
+		Low:       cryptoUsdtRate.Low * usdRate.Value,
+		Close:     cryptoUsdtRate.Close * usdRate.Value,
 		Volume:    cryptoUsdtRate.Volume,
 	}
+
+	fmt.Printf("Calculated %s/RUB rate: %.2f RUB (%.2f USDT * %.4f RUB/USD)\n",
+		cryptoSymbol, cryptoRubRate.Close, cryptoUsdtRate.Close, usdRate.Value)
 
 	return &cryptoRubRate, nil
 }
