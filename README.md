@@ -280,7 +280,38 @@ The application supports the following popular cryptocurrencies:
 
 ## Testing
 
-The project includes comprehensive tests for both API handlers and currency rate functions:
+The project includes comprehensive tests covering all major components:
+
+### Test Coverage
+
+#### Unit Tests
+- **API Handlers** (`internal/api/handlers_test.go`) - Tests for REST endpoints, request validation, and response formatting
+- **CBR Currency Integration** (`internal/currency/cbr/cbr_test.go`) - Tests for Central Bank of Russia API integration with mock server
+- **Binance API Integration** (`internal/currency/binance/binance_test.go`) - Tests for Binance API client with mock responses
+- **Telegram Bot** (`internal/alert/telegram_test.go`) - Tests for subscription management and bot operations with mocks
+- **Scheduler** (`internal/scheduler/scheduler_test.go`) - Tests for currency rate update scheduling and job execution
+
+#### Integration Tests
+- **PostgreSQL Storage** (`internal/storage/postgres_test.go`) - Database integration tests using TestContainers with real PostgreSQL instance
+
+### Test Types
+
+#### Unit Tests
+- Test individual components in isolation
+- Use mocks and stubs for external dependencies
+- Fast execution and no external dependencies
+- Cover error scenarios and edge cases
+
+#### Integration Tests
+- Test components working together
+- Use real database instances via TestContainers
+- Test actual database operations and schema
+- Verify data persistence and retrieval
+
+#### Benchmark Tests
+- Performance testing for critical operations
+- Memory allocation testing
+- Throughput measurements
 
 ### Running Tests
 
@@ -294,9 +325,59 @@ go test -v ./...
 # Run tests for specific package
 go test -v ./internal/api
 
-# Run tests with coverage
+# Run tests with coverage report
 go test -cover ./...
+
+# Run tests with detailed coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+
+# Run only unit tests (fast)
+go test -short ./...
+
+# Run integration tests with TestContainers
+go test -v ./internal/storage
+
+# Run benchmarks
+go test -bench=. ./...
+
+# Run specific test function
+go test -run TestPingHandler ./internal/api
+
+# Run tests in parallel
+go test -parallel 4 ./...
 ```
+
+### Test Structure
+
+Each test file follows Go testing conventions:
+- `TestXxx` functions for unit tests
+- `BenchmarkXxx` functions for benchmarks
+- `ExampleXxx` functions for documentation examples
+- Use `testify` library for assertions and mocks
+- TestContainers for integration tests requiring real databases
+
+### Mock Objects
+
+The tests use various mock implementations:
+- **MockDatabase** - Database operations without actual DB
+- **MockTelegramBot** - Telegram bot operations
+- **MockCBRModule** - CBR API responses
+- **HTTP Test Servers** - Mock external API responses
+
+### Test Dependencies
+
+- `github.com/stretchr/testify` - Testing toolkit with assertions and mocks
+- `github.com/testcontainers/testcontainers-go` - Integration testing with real services
+- Built-in Go testing package for basic test framework
+
+### Continuous Integration
+
+Tests are designed to run in CI/CD environments:
+- No external dependencies for unit tests
+- Integration tests use containerized services
+- Parallel execution support
+- Coverage reporting integration
 
 ## API Documentation
 

@@ -4,13 +4,10 @@ package currency
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/casualdoto/go-currency-tracker/internal/config"
 )
 
 // Structures for parsing API response
@@ -29,52 +26,6 @@ type Valute struct {
 	Previous float64 `json:"Previous"`
 }
 
-// CBRBaseURL is the base URL for CBR API, initialized from environment variable
-var CBRBaseURL string
-
-func init() {
-	log.Println("Initializing CBR package...")
-
-	// Try to load .env file from different possible locations
-	// First try current directory
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found in current directory")
-		// Try parent directory (project root when running from cmd/*)
-		wd, err := os.Getwd()
-		if err == nil {
-			log.Printf("Current working directory: %s", wd)
-			parentDir := filepath.Dir(wd)
-			err = godotenv.Load(filepath.Join(parentDir, ".env"))
-			if err != nil {
-				log.Printf("No .env file found in parent directory: %s", parentDir)
-				// Try from two levels up (if running from deeper directories)
-				grandParentDir := filepath.Dir(parentDir)
-				log.Printf("Trying to load .env from: %s", grandParentDir)
-				_ = godotenv.Load(filepath.Join(grandParentDir, ".env"))
-			}
-		}
-	} else {
-		log.Println(".env file loaded successfully from current directory")
-	}
-
-	// Get base URL from environment
-	CBRBaseURL = os.Getenv("CBR_BASE_URL")
-	log.Printf("CBR_BASE_URL from environment: %s", CBRBaseURL)
-
-	if CBRBaseURL == "" {
-		log.Fatal("CBR_BASE_URL is not set. Please specify it in the environment or .env file.")
-	}
-
-	// Remove quotes if they exist in the URL
-	if len(CBRBaseURL) > 1 && CBRBaseURL[0] == '"' && CBRBaseURL[len(CBRBaseURL)-1] == '"' {
-		CBRBaseURL = CBRBaseURL[1 : len(CBRBaseURL)-1]
-		log.Printf("Quotes removed from CBR_BASE_URL, new value: %s", CBRBaseURL)
-	}
-
-	log.Printf("CBR package initialized with base URL: %s", CBRBaseURL)
-}
-
 // Get rates from the CBR site for the current date
 func GetCBRRates() (*DailyRates, error) {
 	return GetCBRRatesByDate("")
@@ -85,7 +36,8 @@ func GetCBRRates() (*DailyRates, error) {
 // Date format: YYYY-MM-DD (for example, "2023-05-15")
 func GetCBRRatesByDate(date string) (*DailyRates, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := fmt.Sprintf("%s/daily_json.js", CBRBaseURL)
+	baseURL := config.GetCBRBaseURL()
+	url := fmt.Sprintf("%s/daily_json.js", baseURL)
 
 	// If date is specified, form URL for archive
 	if date != "" {
@@ -99,7 +51,7 @@ func GetCBRRatesByDate(date string) (*DailyRates, error) {
 		// In cbr-xml-daily.ru API archive data is available by URL like:
 		// https://www.cbr-xml-daily.ru/archive/YYYY/MM/DD/daily_json.js
 		formattedDate := parsedDate.Format("2006/01/02")
-		url = fmt.Sprintf("%s/archive/%s/daily_json.js", CBRBaseURL, formattedDate)
+		url = fmt.Sprintf("%s/archive/%s/daily_json.js", baseURL, formattedDate)
 	}
 
 	resp, err := client.Get(url)

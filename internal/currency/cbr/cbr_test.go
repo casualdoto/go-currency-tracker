@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/casualdoto/go-currency-tracker/internal/config"
 )
 
 // Mock server for testing CBR API
@@ -87,7 +89,7 @@ func TestGetCBRRates(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	CBRBaseURL = server.URL
+	config.SetCBRBaseURLForTesting(server.URL)
 
 	// Run test
 	rates, err := GetCBRRates()
@@ -118,7 +120,7 @@ func TestGetCBRRatesByDate(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	CBRBaseURL = server.URL
+	config.SetCBRBaseURLForTesting(server.URL)
 
 	// Run test
 	rates, err := GetCBRRatesByDate("2023-06-28")
@@ -149,7 +151,7 @@ func TestGetCurrencyRate(t *testing.T) {
 	server := setupMockCBRServer()
 	defer server.Close()
 
-	CBRBaseURL = server.URL
+	config.SetCBRBaseURLForTesting(server.URL)
 
 	// Run test for USD
 	usdRate, err := GetCurrencyRate("USD", "")

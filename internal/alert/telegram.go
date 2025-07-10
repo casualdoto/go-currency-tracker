@@ -492,7 +492,6 @@ func (t *TelegramBot) SendDailyUpdates() {
 	subscriptions, err := t.db.GetAllTelegramSubscriptions()
 	if err != nil {
 		log.Printf("Error refreshing subscriptions from database: %v", err)
-		// Continue with in-memory cache if available
 	} else {
 		t.mu.Lock()
 		t.subscriptions = subscriptions
@@ -503,7 +502,6 @@ func (t *TelegramBot) SendDailyUpdates() {
 	cryptoSubs, err := t.db.GetAllTelegramCryptoSubscriptions()
 	if err != nil {
 		log.Printf("Error refreshing crypto subscriptions from database: %v", err)
-		// Continue with in-memory cache if available
 	} else {
 		t.mu.Lock()
 		t.cryptoSubs = cryptoSubs
