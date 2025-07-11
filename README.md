@@ -410,8 +410,6 @@ MIT
 
 ## TODO List
 
-List of improvements for the project based on code analysis:
-
 ### High Priority
 
 1. **Refactor handlers.go**
