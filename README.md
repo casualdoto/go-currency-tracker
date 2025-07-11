@@ -407,3 +407,81 @@ go-currency-tracker/
 ## License
 
 MIT
+
+## TODO List
+
+List of improvements for the project based on code analysis:
+
+### High Priority
+
+1. **Refactor handlers.go**
+   - [ ] Split handlers.go file (1680 lines) into multiple files by functionality
+   - [ ] Extract duplicate `HistoricalCryptoRate` structures to separate file
+   - [ ] Create base handlers for code reuse
+   - [ ] Separate CBR and Crypto handlers into different files
+
+2. **Centralized Logging**
+   - [ ] Replace standard `log` with structured logging (`slog` or `logrus`)
+   - [ ] Add contextual logging with request tracing
+   - [ ] Configure log levels (DEBUG, INFO, WARN, ERROR)
+   - [ ] Add JSON format logging for production
+
+3. **Configuration Improvements**
+   - [ ] Centralize all configuration in one place
+   - [ ] Remove duplication between config.go and direct `os.Getenv` calls
+   - [ ] Add configuration validation on application startup
+   - [ ] Use consistent approach for environment variables
+
+### Medium Priority
+
+4. **Input Data Validation**
+   - [ ] Implement validation library (e.g., `validator`)
+   - [ ] Validate all API input parameters
+   - [ ] Add request limits validation (dates, periods)
+   - [ ] Add input data sanitization
+
+5. **Performance Optimization**
+   - [ ] Add Redis for caching frequently requested data
+   - [ ] Implement database connection pooling
+   - [ ] Add rate limiting for API endpoints
+   - [ ] Optimize SQL queries with proper indexing
+
+6. **Security Improvements**
+   - [ ] Configure CORS policies
+   - [ ] Implement API key authentication for critical endpoints
+   - [ ] Add input sanitization against SQL injection
+   - [ ] Add rate limiting by IP addresses
+
+### Low Priority
+
+7. **Extended Testing**
+   - [ ] Increase test coverage to 80%+
+   - [ ] Add integration tests for all API endpoints
+   - [ ] Implement mocking for all external dependencies
+   - [ ] Add load testing
+
+8. **Monitoring and Metrics**
+   - [ ] Add detailed health checks
+   - [ ] Implement Prometheus metrics
+   - [ ] Add request tracing (OpenTelemetry)
+   - [ ] Configure alerts for critical metrics
+
+9. **Architecture Improvements**
+   - [ ] Add middleware for common request processing
+   - [ ] Implement graceful shutdown
+   - [ ] Add circuit breaker for external APIs
+   - [ ] Implement dependency injection
+
+10. **DevOps and Deployment**
+    - [ ] Add CI/CD pipeline with GitHub Actions
+    - [ ] Configure automated testing in containers
+    - [ ] Add Docker health checks
+    - [ ] Optimize Docker image sizes
+
+### Documentation
+
+11. **Documentation Improvements**
+    - [ ] Add architectural diagrams
+    - [ ] Add changelog for versions
+
+*This TODO list will be updated as tasks are completed and new improvements are identified.*
