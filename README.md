@@ -413,10 +413,10 @@ MIT
 ### High Priority
 
 1. **Refactor handlers.go**
-   - [ ] Split handlers.go file (1680 lines) into multiple files by functionality
-   - [ ] Extract duplicate `HistoricalCryptoRate` structures to separate file
-   - [ ] Create base handlers for code reuse
-   - [ ] Separate CBR and Crypto handlers into different files
+   - [x] Split handlers.go file (1680 lines) into multiple files by functionality
+   - [x] Extract duplicate `HistoricalCryptoRate` structures to separate file
+   - [x] Create base handlers for code reuse
+   - [x] Separate CBR and Crypto handlers into different files
 
 2. **Centralized Logging**
    - [ ] Replace standard `log` with structured logging (`slog` or `logrus`)
