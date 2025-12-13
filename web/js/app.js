@@ -426,7 +426,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Load historical data for a specific number of days
-    async function loadCurrencyHistory(currencyCode, days) {
+    let loadCurrencyHistoryInProgress = false;
+    let loadCurrencyHistoryLastParams = null;
+    const MAX_RETRY_ATTEMPTS = 3; // Maximum number of retry attempts
+    async function loadCurrencyHistory(currencyCode, days, retryAttempt = 0) {
+        const paramsKey = `${currencyCode}_${days}`;
+        
+        // Prevent multiple simultaneous calls with same parameters
+        if (loadCurrencyHistoryInProgress && loadCurrencyHistoryLastParams === paramsKey && retryAttempt === 0) {
+            return;
+        }
+        
+        loadCurrencyHistoryInProgress = true;
+        loadCurrencyHistoryLastParams = paramsKey;
         try {
             // Reset metrics and destroy existing chart
             resetMetrics();
@@ -462,15 +474,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 const expectedDaysCount = getExpectedBusinessDays(startDate, endDate);
                 const actualDaysCount = data.data.length;
                 
-                // If we don't have enough data, wait a bit and try again
-                if (actualDaysCount < expectedDaysCount * 0.9) { // Allow for 10% missing days
+                // If we don't have enough data, wait a bit and try again (but limit retries)
+                if (actualDaysCount < expectedDaysCount * 0.9 && retryAttempt < MAX_RETRY_ATTEMPTS) { // Allow for 10% missing days
                     document.getElementById('loading-status').textContent = `Loading more data (${actualDaysCount}/${expectedDaysCount} days)...`;
                     document.getElementById('loading-progress').style.width = `${(actualDaysCount / expectedDaysCount) * 80}%`;
                     
                     setTimeout(() => {
-                        loadCurrencyHistory(currencyCode, days);
+                        loadCurrencyHistory(currencyCode, days, retryAttempt + 1);
                     }, 1000); // Wait 1 second before retrying
                     return;
+                } else if (retryAttempt >= MAX_RETRY_ATTEMPTS) {
+                    loadCurrencyHistoryInProgress = false;
+                    loadCurrencyHistoryLastParams = null;
+                }
+                
+                // If we've exhausted retries or have enough data, proceed with available data
+                if (retryAttempt >= MAX_RETRY_ATTEMPTS && actualDaysCount < expectedDaysCount * 0.9) {
+                    // Continue with available data even if it's less than expected
                 }
                 
                 // Update loading progress
@@ -529,6 +549,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Enable Excel download button
                 downloadExcelBtn.disabled = false;
+                loadCurrencyHistoryInProgress = false;
+                loadCurrencyHistoryLastParams = null;
             } else {
                 // Hide loading indicator
                 loadingIndicator.classList.add('d-none');
@@ -537,6 +559,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Disable Excel download button
                 downloadExcelBtn.disabled = true;
                 
+                loadCurrencyHistoryInProgress = false;
+                loadCurrencyHistoryLastParams = null;
                 alert('No data available for the selected period. Try a different period.');
                 resetMetrics();
             }
@@ -548,6 +572,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable Excel download button
             downloadExcelBtn.disabled = true;
             
+            loadCurrencyHistoryInProgress = false;
+            loadCurrencyHistoryLastParams = null;
             console.error('Error loading historical data:', error);
             alert('Failed to load historical data. Please try again later.');
             resetMetrics();
@@ -555,7 +581,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Load historical data for custom date range
-    async function loadCurrencyHistoryCustom(currencyCode, startDate, endDate) {
+    let loadCurrencyHistoryCustomInProgress = false;
+    let loadCurrencyHistoryCustomLastParams = null;
+    const MAX_RETRY_ATTEMPTS_CUSTOM = 3; // Maximum number of retry attempts
+    async function loadCurrencyHistoryCustom(currencyCode, startDate, endDate, retryAttempt = 0) {
+        const startDateStr = formatDate(startDate);
+        const endDateStr = formatDate(endDate);
+        const paramsKey = `${currencyCode}_${startDateStr}_${endDateStr}`;
+        
+        // Prevent multiple simultaneous calls with same parameters
+        if (loadCurrencyHistoryCustomInProgress && loadCurrencyHistoryCustomLastParams === paramsKey && retryAttempt === 0) {
+            return;
+        }
+        
+        loadCurrencyHistoryCustomInProgress = true;
+        loadCurrencyHistoryCustomLastParams = paramsKey;
         try {
             // Show loading indicator
             resetMetrics();
@@ -570,10 +610,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loading-progress').style.width = '10%';
             document.getElementById('loading-status').textContent = 'Retrieving currency data from database...';
             
-            // Format dates for API request
-            const startDateStr = formatDate(startDate);
-            const endDateStr = formatDate(endDate);
-            
             // Request to API for historical data using the new endpoint
             const response = await fetch(`/rates/cbr/history/range?code=${currencyCode}&start_date=${startDateStr}&end_date=${endDateStr}`);
             const data = await response.json();
@@ -587,15 +623,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 const expectedDaysCount = getExpectedBusinessDays(startDate, endDate);
                 const actualDaysCount = data.data.length;
                 
-                // If we don't have enough data, wait a bit and try again
-                if (actualDaysCount < expectedDaysCount * 0.9) { // Allow for 10% missing days
+                // If we don't have enough data, wait a bit and try again (but limit retries)
+                if (actualDaysCount < expectedDaysCount * 0.9 && retryAttempt < MAX_RETRY_ATTEMPTS_CUSTOM) { // Allow for 10% missing days
                     document.getElementById('loading-status').textContent = `Loading more data (${actualDaysCount}/${expectedDaysCount} days)...`;
                     document.getElementById('loading-progress').style.width = `${(actualDaysCount / expectedDaysCount) * 80}%`;
                     
                     setTimeout(() => {
-                        loadCurrencyHistoryCustom(currencyCode, startDate, endDate);
+                        loadCurrencyHistoryCustom(currencyCode, startDate, endDate, retryAttempt + 1);
                     }, 1000); // Wait 1 second before retrying
                     return;
+                } else if (retryAttempt >= MAX_RETRY_ATTEMPTS_CUSTOM) {
+                    loadCurrencyHistoryCustomInProgress = false;
+                    loadCurrencyHistoryCustomLastParams = null;
+                }
+                
+                // If we've exhausted retries or have enough data, proceed with available data
+                if (retryAttempt >= MAX_RETRY_ATTEMPTS_CUSTOM && actualDaysCount < expectedDaysCount * 0.9) {
+                    // Continue with available data even if it's less than expected
                 }
                 
                 // Update loading progress
@@ -654,6 +698,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Enable Excel download button
                 downloadExcelBtn.disabled = false;
+                loadCurrencyHistoryCustomInProgress = false;
+                loadCurrencyHistoryCustomLastParams = null;
             } else {
                 // Hide loading indicator
                 loadingIndicator.classList.add('d-none');
@@ -662,6 +708,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Disable Excel download button
                 downloadExcelBtn.disabled = true;
                 
+                loadCurrencyHistoryCustomInProgress = false;
+                loadCurrencyHistoryCustomLastParams = null;
                 alert('No data available for the selected date range. Try a different period.');
                 resetMetrics();
             }
@@ -673,6 +721,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable Excel download button
             downloadExcelBtn.disabled = true;
             
+            loadCurrencyHistoryCustomInProgress = false;
+            loadCurrencyHistoryCustomLastParams = null;
             console.error('Error loading historical data:', error);
             alert('Failed to load historical data. Please try again later.');
             resetMetrics();

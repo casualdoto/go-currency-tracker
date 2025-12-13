@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	currency "github.com/casualdoto/go-currency-tracker/internal/currency/cbr"
@@ -509,6 +510,117 @@ func GetCurrencyHistoryByDateRangeHandler(w http.ResponseWriter, r *http.Request
 				"value":    dbRate.Value,
 				"previous": dbRate.Previous,
 			})
+		}
+	}
+
+	// If we don't have enough data, try to fetch missing dates from CBR API
+	// Check which dates are missing
+	existingDates := make(map[string]bool)
+	for _, item := range history {
+		if dateStr, ok := item["date"].(string); ok {
+			existingDates[dateStr] = true
+		}
+	}
+
+	// Use a channel to collect fetched rates
+	type fetchedRate struct {
+		dateStr string
+		date    time.Time
+		rate    *currency.Valute
+	}
+	rateChan := make(chan fetchedRate, 10)
+	errorChan := make(chan string, 10)
+
+	// Fetch missing dates in parallel using goroutines
+	var wg sync.WaitGroup
+	currentDate := startDate
+	for !currentDate.After(endDate) {
+		dateStr := currentDate.Format("2006-01-02")
+		if !existingDates[dateStr] {
+			wg.Add(1)
+			go func(dateStr string, date time.Time) {
+				defer wg.Done()
+				rate, err := currency.GetCurrencyRate(currencyCode, dateStr)
+				if err == nil {
+					rateChan <- fetchedRate{dateStr: dateStr, date: date, rate: rate}
+				} else {
+					// Skip weekends and holidays silently
+					errorChan <- dateStr
+				}
+			}(dateStr, currentDate)
+		}
+		currentDate = currentDate.AddDate(0, 0, 1)
+	}
+
+	// Close channels when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(rateChan)
+		close(errorChan)
+	}()
+
+	// Collect fetched rates
+	for fetched := range rateChan {
+		// Add to history
+		history = append(history, map[string]interface{}{
+			"date":     fetched.dateStr,
+			"code":     fetched.rate.CharCode,
+			"name":     fetched.rate.Name,
+			"nominal":  fetched.rate.Nominal,
+			"value":    fetched.rate.Value,
+			"previous": fetched.rate.Previous,
+		})
+
+		// Save to database in background
+		go func(dateStr string, date time.Time, currentRate *currency.Valute) {
+			// Get all rates for this date
+			rates, err := currency.GetCBRRatesByDate(dateStr)
+			if err == nil {
+				// Convert API rates to database format
+				var dbRates []storage.CurrencyRate
+				for code, valute := range rates.Valute {
+					dbRates = append(dbRates, storage.CurrencyRate{
+						Date:         date,
+						CurrencyCode: code,
+						CurrencyName: valute.Name,
+						Nominal:      valute.Nominal,
+						Value:        valute.Value,
+						Previous:     valute.Previous,
+					})
+				}
+
+				// Save to database
+				if err := db.SaveCurrencyRates(dbRates); err != nil {
+					fmt.Printf("Failed to save currency rates to database: %v\n", err)
+				}
+			} else {
+				// If we couldn't get all rates, at least save this one
+				dbRate := storage.CurrencyRate{
+					Date:         date,
+					CurrencyCode: currentRate.CharCode,
+					CurrencyName: currentRate.Name,
+					Nominal:      currentRate.Nominal,
+					Value:        currentRate.Value,
+					Previous:     currentRate.Previous,
+				}
+				if err := db.SaveCurrencyRates([]storage.CurrencyRate{dbRate}); err != nil {
+					fmt.Printf("Failed to save currency rate to database: %v\n", err)
+				}
+			}
+		}(fetched.dateStr, fetched.date, fetched.rate)
+	}
+
+	// Sort history by date
+	if len(history) > 0 {
+		// Simple bubble sort by date (ascending)
+		for i := 0; i < len(history)-1; i++ {
+			for j := i + 1; j < len(history); j++ {
+				dateI, _ := time.Parse("2006-01-02", history[i]["date"].(string))
+				dateJ, _ := time.Parse("2006-01-02", history[j]["date"].(string))
+				if dateI.After(dateJ) {
+					history[i], history[j] = history[j], history[i]
+				}
+			}
 		}
 	}
 
