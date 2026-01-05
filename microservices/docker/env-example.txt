@@ -1,0 +1,23 @@
+# Infrastructure Configuration
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=currency_user
+POSTGRES_PASSWORD=currency_pass
+POSTGRES_DB=currency_tracker
+POSTGRES_SSLMODE=disable
+
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+KAFKA_BROKERS=kafka:29092
+
+# API Gateway Configuration
+PORT=8080
+HOST=0.0.0.0
+RATES_SERVICE_URL=http://rates-service:8081
+
+# Service Ports
+API_GATEWAY_PORT=8080
+RATES_SERVICE_PORT=8081

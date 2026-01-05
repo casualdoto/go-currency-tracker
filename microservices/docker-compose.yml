@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: currency-tracker-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - currency-tracker-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: currency-tracker-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - currency-tracker-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: currency-tracker-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - currency-tracker-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: currency-tracker-postgres
+    environment:
+      POSTGRES_DB: currency_tracker
+      POSTGRES_USER: currency_user
+      POSTGRES_PASSWORD: currency_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - currency-tracker-network
+
+  # API Gateway (Nginx)
+  api-gateway:
+    image: nginx:alpine
+    container_name: currency-tracker-api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - rates-service
+    networks:
+      - currency-tracker-network
+
+  rates-service:
+    build:
+      context: .
+      dockerfile: ./rates-service/Dockerfile
+    container_name: currency-tracker-rates-service
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=currency_tracker
+      - POSTGRES_USER=currency_user
+      - POSTGRES_PASSWORD=currency_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - currency-tracker-network
+
+  scheduler-worker:
+    build:
+      context: .
+      dockerfile: ./scheduler-worker/Dockerfile
+    container_name: currency-tracker-scheduler-worker
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - currency-tracker-network
+
+  cbr-worker:
+    build:
+      context: .
+      dockerfile: ./cbr-worker/Dockerfile
+    container_name: currency-tracker-cbr-worker
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - currency-tracker-network
+
+  binance-worker:
+    build:
+      context: .
+      dockerfile: ./binance-worker/Dockerfile
+    container_name: currency-tracker-binance-worker
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - currency-tracker-network
+
+networks:
+  currency-tracker-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
