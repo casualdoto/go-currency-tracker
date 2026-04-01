@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: currency_user
+      POSTGRES_PASSWORD: currency_password
+      POSTGRES_DB: currency_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U currency_user -d currency_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      bash -c "
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic raw-rates --replication-factor 1 --partitions 3 &&
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic normalized-rates --replication-factor 1 --partitions 3 &&
+        echo 'Topics created successfully'
+      "
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: currency_user
+      DB_PASSWORD: currency_password
+      DB_NAME: currency_db
+      DB_SSLMODE: disable
+      JWT_SECRET: supersecretjwtkey
+      SERVER_PORT: 8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  data-collector:
+    build: ./data-collector
+    environment:
+      CBR_BASE_URL: https://www.cbr-xml-daily.ru
+      KAFKA_BROKERS: kafka:29092
+      COLLECT_INTERVAL_CBR: 86400
+      COLLECT_INTERVAL_CRYPTO: 60
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  normalization-service:
+    build: ./normalization-service
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      CBR_BASE_URL: https://www.cbr-xml-daily.ru
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  history-service:
+    build: ./history-service
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: currency_user
+      DB_PASSWORD: currency_password
+      DB_NAME: currency_db
+      DB_SSLMODE: disable
+      KAFKA_BROKERS: kafka:29092
+      SERVER_PORT: 8084
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:29092
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      SERVER_PORT: 8085
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  telegram-bot:
+    build: ./telegram-bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      API_GATEWAY_URL: http://api-gateway:8080
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - api-gateway
+      - notification-service
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8082
+      HISTORY_SERVICE_URL: http://history-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+      JWT_SECRET: supersecretjwtkey
+      SERVER_PORT: 8080
+    depends_on:
+      - auth-service
+      - history-service
+      - notification-service
+
+volumes:
+  postgres_data:
