@@ -57,6 +57,7 @@ services:
 
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
+    restart: "no"
     depends_on:
       kafka:
         condition: service_healthy
@@ -94,6 +95,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   normalization-service:
     build: ./normalization-service
@@ -103,6 +106,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   history-service:
     build: ./history-service
@@ -122,26 +127,32 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   notification-service:
     build: ./notification-service
+    env_file:
+      - configs/.env
     ports:
       - "8085:8085"
     environment:
       REDIS_ADDR: redis:6379
       KAFKA_BROKERS: kafka:29092
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       SERVER_PORT: 8085
     depends_on:
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   telegram-bot:
     build: ./telegram-bot
+    env_file:
+      - configs/.env
     environment:
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       API_GATEWAY_URL: http://api-gateway:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:8085
       REDIS_ADDR: redis:6379

@@ -151,6 +151,13 @@
 - [ ] Проверить сценарий уведомлений: курс срабатывает → Notification → Telegram Bot
 - [ ] Нагрузочное тестирование ключевых сервисов
 
+### 11. Перенос таблицы из Postgres в Clickhouse
+
+- [ ] Создать схему ClickHouse (и удалить из Postgres):
+  - [ ] Таблица `crypto_rates` (id, timestamp, symbol, open, high, low, close, volume, price_rub, created_at)
+  - [ ] Уникальность по `(timestamp, symbol)`
+  - [ ] Индексы по `timestamp` и `symbol`
+
 
 ---
 
