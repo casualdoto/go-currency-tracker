@@ -18,10 +18,11 @@ const (
 
 type Subscriber struct {
 	reader *kafka.Reader
-	db     *storage.PostgresDB
+	pg     *storage.PostgresDB
+	ch     *storage.ClickHouseDB
 }
 
-func New(brokers string, db *storage.PostgresDB) *Subscriber {
+func New(brokers string, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Subscriber {
 	brokerList := strings.Split(brokers, ",")
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  brokerList,
@@ -30,7 +31,7 @@ func New(brokers string, db *storage.PostgresDB) *Subscriber {
 		MinBytes: 1,
 		MaxBytes: 10e6,
 	})
-	return &Subscriber{reader: r, db: db}
+	return &Subscriber{reader: r, pg: pg, ch: ch}
 }
 
 func (s *Subscriber) Run() error {
@@ -94,10 +95,10 @@ func (s *Subscriber) process(data []byte) error {
 				Previous:     r.PreviousRUB,
 			})
 		}
-		if err := s.db.SaveCurrencyRates(dbRates); err != nil {
+		if err := s.pg.SaveCurrencyRates(dbRates); err != nil {
 			return err
 		}
-		log.Printf("subscriber: saved %d CBR rates", len(dbRates))
+		log.Printf("subscriber: saved %d CBR rates to PostgreSQL", len(dbRates))
 
 	case "binance":
 		var rates []normalizedCryptoRate
@@ -117,10 +118,10 @@ func (s *Subscriber) process(data []byte) error {
 				PriceRUB:  r.PriceRUB,
 			})
 		}
-		if err := s.db.SaveCryptoRates(dbRates); err != nil {
+		if err := s.ch.SaveCryptoRates(dbRates); err != nil {
 			return err
 		}
-		log.Printf("subscriber: saved %d crypto rates", len(dbRates))
+		log.Printf("subscriber: saved %d crypto rates to ClickHouse", len(dbRates))
 	}
 	return nil
 }

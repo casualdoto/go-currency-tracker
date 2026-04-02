@@ -17,6 +17,28 @@ services:
       timeout: 5s
       retries: 10
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native protocol
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
   redis:
     image: redis:7-alpine
     ports:
@@ -120,10 +142,17 @@ services:
       DB_PASSWORD: currency_password
       DB_NAME: currency_db
       DB_SSLMODE: disable
+      CH_HOST: clickhouse
+      CH_PORT: 9000
+      CH_DATABASE: default
+      CH_USER: default
+      CH_PASSWORD: ""
       KAFKA_BROKERS: kafka:29092
       SERVER_PORT: 8084
     depends_on:
       postgres:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
       kafka:
         condition: service_healthy
@@ -175,5 +204,16 @@ services:
       - history-service
       - notification-service
 
+  web-ui:
+    build: ./web-ui
+    ports:
+      - "3000:3000"
+    environment:
+      API_GATEWAY_URL: http://api-gateway:8080
+      SERVER_PORT: 3000
+    depends_on:
+      - api-gateway
+
 volumes:
   postgres_data:
+  clickhouse_data:

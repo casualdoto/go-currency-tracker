@@ -18,7 +18,8 @@ import (
 func main() {
 	cfg := config.Load()
 
-	db, err := storage.NewPostgresDB(storage.Config{
+	// Connect to PostgreSQL (CBR rates)
+	pg, err := storage.NewPostgresDB(storage.Config{
 		Host:     cfg.DBHost,
 		Port:     cfg.DBPort,
 		User:     cfg.DBUser,
@@ -27,16 +28,33 @@ func main() {
 		SSLMode:  cfg.DBSSLMode,
 	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatalf("failed to connect to postgres: %v", err)
 	}
-	defer db.Close()
+	defer pg.Close()
 
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("failed to init schema: %v", err)
+	if err := pg.InitSchema(); err != nil {
+		log.Fatalf("failed to init postgres schema: %v", err)
+	}
+
+	// Connect to ClickHouse (crypto rates)
+	ch, err := storage.NewClickHouseDB(storage.ClickHouseConfig{
+		Host:     cfg.CHHost,
+		Port:     cfg.CHPort,
+		Database: cfg.CHDatabase,
+		User:     cfg.CHUser,
+		Password: cfg.CHPassword,
+	})
+	if err != nil {
+		log.Fatalf("failed to connect to clickhouse: %v", err)
+	}
+	defer ch.Close()
+
+	if err := ch.InitSchema(); err != nil {
+		log.Fatalf("failed to init clickhouse schema: %v", err)
 	}
 
 	// Start Kafka subscriber in background
-	sub := subscriber.New(cfg.KafkaBrokers, db)
+	sub := subscriber.New(cfg.KafkaBrokers, pg, ch)
 	go func() {
 		log.Println("History Service: starting Kafka subscriber")
 		if err := sub.Run(); err != nil {
@@ -45,7 +63,7 @@ func main() {
 	}()
 
 	// Setup HTTP router
-	h := handler.New(db)
+	h := handler.New(pg, ch)
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -54,7 +72,7 @@ func main() {
 	r.Get("/history/cbr", h.GetCBRHistory)
 	r.Get("/history/cbr/range", h.GetCBRHistoryRange)
 
-	// Crypto history endpoints
+	// Crypto history endpoints (backed by ClickHouse)
 	r.Get("/history/crypto", h.GetCryptoHistory)
 	r.Get("/history/crypto/range", h.GetCryptoHistoryRange)
 	r.Get("/history/crypto/symbols", h.GetCryptoSymbols)

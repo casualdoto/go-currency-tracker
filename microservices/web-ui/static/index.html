@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Currency Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3748;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; color: #63b3ed; }
+    header .dot { width: 8px; height: 8px; border-radius: 50%; background: #48bb78; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    nav {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3748;
+      display: flex;
+      padding: 0 24px;
+      gap: 4px;
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: #718096;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: .875rem;
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+    }
+    nav button:hover { color: #e2e8f0; }
+    nav button.active { color: #63b3ed; border-bottom-color: #63b3ed; }
+
+    main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #a0aec0;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    /* Cards */
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .grid { display: grid; gap: 12px; }
+    .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+    .rate-card { background: #1a1d27; border: 1px solid #2d3748; border-radius: 8px; padding: 16px; }
+    .rate-card .code { font-size: .75rem; color: #718096; margin-bottom: 4px; }
+    .rate-card .name { font-size: .875rem; font-weight: 500; margin-bottom: 8px; }
+    .rate-card .value { font-size: 1.5rem; font-weight: 700; color: #63b3ed; }
+    .rate-card .change { font-size: .75rem; margin-top: 4px; }
+    .rate-card .change.up { color: #48bb78; }
+    .rate-card .change.down { color: #fc8181; }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .controls input, .controls select {
+      background: #1a1d27;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 8px 12px;
+      font-size: .875rem;
+    }
+    .controls input:focus, .controls select:focus {
+      outline: none;
+      border-color: #63b3ed;
+    }
+    button.btn {
+      background: #3182ce;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: .875rem;
+      transition: background .2s;
+    }
+    button.btn:hover { background: #2b6cb0; }
+    button.btn.secondary { background: #2d3748; }
+    button.btn.secondary:hover { background: #4a5568; }
+    button.btn.danger { background: #e53e3e; }
+    button.btn.danger:hover { background: #c53030; }
+
+    /* Chart */
+    .chart-container {
+      background: #1a1d27;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .chart-container canvas { max-height: 350px; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .875rem;
+    }
+    th {
+      background: #2d3748;
+      color: #a0aec0;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 500;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2d3748;
+      color: #e2e8f0;
+    }
+    tr:hover td { background: #1e2535; }
+
+    /* Subscription list */
+    .sub-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #1a1d27;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .sub-item .label { font-size: .875rem; }
+    .sub-item .badge {
+      font-size: .7rem;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: #2b6cb0;
+      color: #bee3f8;
+    }
+
+    /* Auth */
+    .auth-form {
+      max-width: 380px;
+      margin: 60px auto;
+    }
+    .auth-form h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 24px; text-align: center; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: .8rem; color: #a0aec0; margin-bottom: 6px; }
+    .form-group input {
+      width: 100%;
+      background: #1a1d27;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      font-size: .875rem;
+    }
+    .form-group input:focus { outline: none; border-color: #63b3ed; }
+    .auth-toggle { text-align: center; margin-top: 16px; font-size: .8rem; color: #718096; }
+    .auth-toggle a { color: #63b3ed; cursor: pointer; }
+
+    .msg {
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: .85rem;
+      margin-bottom: 16px;
+    }
+    .msg.error { background: #742a2a; color: #fed7d7; }
+    .msg.success { background: #1c4532; color: #c6f6d5; }
+
+    .loading { color: #718096; font-size: .875rem; }
+    .empty { color: #4a5568; text-align: center; padding: 40px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="statusDot"></div>
+  <h1>Currency Tracker</h1>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <span id="userLabel" style="font-size:.8rem;color:#718096"></span>
+    <button class="btn secondary" id="authBtn" onclick="handleAuthBtn()">Войти</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('rates', this)">Курсы</button>
+  <button onclick="showTab('crypto', this)">Крипто</button>
+  <button onclick="showTab('charts', this)">Графики</button>
+  <button onclick="showTab('subscriptions', this)">Подписки</button>
+  <button onclick="showTab('export', this)">Экспорт</button>
+</nav>
+
+<main>
+
+  <!-- ====== RATES ====== -->
+  <div id="tab-rates" class="tab-content active">
+    <div class="controls">
+      <input type="date" id="cbrDate" />
+      <button class="btn" onclick="loadCBRRates()">Загрузить</button>
+      <button class="btn secondary" onclick="loadTodayCBR()">Сегодня</button>
+      <span id="cbrStatus" class="loading"></span>
+    </div>
+    <div class="grid grid-3" id="cbrRatesGrid">
+      <div class="empty">Выберите дату и нажмите «Загрузить»</div>
+    </div>
+  </div>
+
+  <!-- ====== CRYPTO ====== -->
+  <div id="tab-crypto" class="tab-content">
+    <div class="controls">
+      <select id="cryptoSymbol">
+        <option value="">— выберите символ —</option>
+      </select>
+      <button class="btn" onclick="loadCryptoRates()">Загрузить</button>
+      <span id="cryptoStatus" class="loading"></span>
+    </div>
+    <div id="cryptoRatesContainer">
+      <div class="empty">Выберите символ и нажмите «Загрузить»</div>
+    </div>
+  </div>
+
+  <!-- ====== CHARTS ====== -->
+  <div id="tab-charts" class="tab-content">
+    <div class="section-title">Исторический график</div>
+    <div class="controls">
+      <select id="chartType" onchange="toggleChartType()">
+        <option value="cbr">CBR (фиатные)</option>
+        <option value="crypto">Крипто</option>
+      </select>
+      <input type="text" id="chartCode" placeholder="USD / BTCUSDT" style="width:130px" />
+      <input type="date" id="chartFrom" />
+      <input type="date" id="chartTo" />
+      <button class="btn" onclick="loadChart()">Построить</button>
+    </div>
+    <div class="chart-container">
+      <canvas id="mainChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ====== SUBSCRIPTIONS ====== -->
+  <div id="tab-subscriptions" class="tab-content">
+    <div id="subsAuthWarn" class="msg error" style="display:none">
+      Войдите в систему для управления подписками.
+    </div>
+    <div id="subsContent" style="display:none">
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div style="flex:1;min-width:280px">
+          <div class="section-title">Добавить подписку</div>
+          <div class="card">
+            <div class="form-group">
+              <label>Тип</label>
+              <select id="subType" style="width:100%;background:#0f1117;border:1px solid #2d3748;border-radius:6px;color:#e2e8f0;padding:8px 12px">
+                <option value="cbr">CBR (валюта)</option>
+                <option value="crypto">Крипто</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Символ / Код</label>
+              <input type="text" id="subSymbol" placeholder="USD, BTCUSDT..." style="width:100%" />
+            </div>
+            <button class="btn" onclick="addSubscription()">Подписаться</button>
+            <span id="subMsg" style="font-size:.8rem;margin-left:8px"></span>
+          </div>
+        </div>
+        <div style="flex:2;min-width:280px">
+          <div class="section-title">Мои подписки</div>
+          <div id="subsList"><div class="loading">Загрузка...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== EXPORT ====== -->
+  <div id="tab-export" class="tab-content">
+    <div class="section-title">Экспорт данных в CSV</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+
+      <div class="card" style="flex:1;min-width:280px">
+        <div style="font-weight:600;margin-bottom:16px">CBR курсы</div>
+        <div class="form-group">
+          <label>Код валюты</label>
+          <input type="text" id="expCbrCode" placeholder="USD" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Дата начала</label>
+          <input type="date" id="expCbrFrom" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Дата конца</label>
+          <input type="date" id="expCbrTo" style="width:100%" />
+        </div>
+        <button class="btn" onclick="exportCBR()">Скачать CSV</button>
+      </div>
+
+      <div class="card" style="flex:1;min-width:280px">
+        <div style="font-weight:600;margin-bottom:16px">Крипто курсы</div>
+        <div class="form-group">
+          <label>Символ</label>
+          <input type="text" id="expCryptoSymbol" placeholder="BTCUSDT" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Дата начала</label>
+          <input type="date" id="expCryptoFrom" style="width:100%" />
+        </div>
+        <div class="form-group">
+          <label>Дата конца</label>
+          <input type="date" id="expCryptoTo" style="width:100%" />
+        </div>
+        <button class="btn" onclick="exportCrypto()">Скачать CSV</button>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<!-- Auth Modal -->
+<div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+  <div class="card auth-form" style="width:100%;max-width:380px">
+    <h2 id="authModalTitle">Вход</h2>
+    <div id="authMsg"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="authEmail" />
+    </div>
+    <div class="form-group">
+      <label>Пароль</label>
+      <input type="password" id="authPassword" />
+    </div>
+    <button class="btn" style="width:100%" onclick="submitAuth()">Продолжить</button>
+    <div class="auth-toggle">
+      <span id="authToggleText">Нет аккаунта?</span>
+      <a onclick="toggleAuthMode()"> <span id="authToggleLink">Зарегистрироваться</span></a>
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <a onclick="closeAuthModal()" style="color:#718096;cursor:pointer;font-size:.8rem">Отмена</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+// All API calls go through the API Gateway.
+// In Docker the gateway is at port 8080; when opening index.html directly from
+// disk set window.API_BASE to point at the gateway.
+const API_BASE = window.API_BASE || 'http://localhost:8080';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let token = localStorage.getItem('token') || '';
+let authMode = 'login'; // 'login' | 'register'
+let mainChart = null;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  updateAuthUI();
+  loadCryptoSymbols();
+
+  // Default dates
+  const today = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
+  document.getElementById('cbrDate').value = today;
+  document.getElementById('chartFrom').value = monthAgo;
+  document.getElementById('chartTo').value = today;
+  document.getElementById('expCbrFrom').value = monthAgo;
+  document.getElementById('expCbrTo').value = today;
+  document.getElementById('expCryptoFrom').value = monthAgo;
+  document.getElementById('expCryptoTo').value = today;
+
+  loadTodayCBR();
+});
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+
+  if (name === 'subscriptions') initSubscriptionsTab();
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+function updateAuthUI() {
+  const label = document.getElementById('userLabel');
+  const btn   = document.getElementById('authBtn');
+  if (token) {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    label.textContent = payload.email || 'пользователь';
+    btn.textContent = 'Выйти';
+  } else {
+    label.textContent = '';
+    btn.textContent = 'Войти';
+  }
+}
+
+function handleAuthBtn() {
+  if (token) {
+    logout();
+  } else {
+    openAuthModal();
+  }
+}
+
+function openAuthModal() {
+  document.getElementById('authModal').style.display = 'flex';
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authMsg').innerHTML = '';
+}
+
+function closeAuthModal() {
+  document.getElementById('authModal').style.display = 'none';
+}
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  document.getElementById('authModalTitle').textContent = authMode === 'login' ? 'Вход' : 'Регистрация';
+  document.getElementById('authToggleText').textContent = authMode === 'login' ? 'Нет аккаунта?' : 'Уже есть аккаунт?';
+  document.getElementById('authToggleLink').textContent = authMode === 'login' ? 'Зарегистрироваться' : 'Войти';
+}
+
+async function submitAuth() {
+  const email    = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const msgEl    = document.getElementById('authMsg');
+
+  if (!email || !password) {
+    msgEl.innerHTML = '<div class="msg error">Заполните все поля</div>';
+    return;
+  }
+
+  const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+  try {
+    const res = await fetch(API_BASE + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.innerHTML = `<div class="msg error">${data.error || 'Ошибка'}</div>`;
+      return;
+    }
+    token = data.token;
+    localStorage.setItem('token', token);
+    updateAuthUI();
+    closeAuthModal();
+  } catch (e) {
+    msgEl.innerHTML = `<div class="msg error">Ошибка соединения</div>`;
+  }
+}
+
+async function logout() {
+  try {
+    await fetch(API_BASE + '/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+    });
+  } catch {}
+  token = '';
+  localStorage.removeItem('token');
+  updateAuthUI();
+}
+
+// ─── CBR Rates ────────────────────────────────────────────────────────────────
+function loadTodayCBR() {
+  document.getElementById('cbrDate').value = new Date().toISOString().slice(0, 10);
+  loadCBRRates();
+}
+
+async function loadCBRRates() {
+  const date   = document.getElementById('cbrDate').value;
+  const status = document.getElementById('cbrStatus');
+  const grid   = document.getElementById('cbrRatesGrid');
+
+  status.textContent = 'Загрузка...';
+  grid.innerHTML = '';
+
+  try {
+    const res  = await fetch(`${API_BASE}/rates/cbr?date=${date}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      grid.innerHTML = '<div class="empty">Данных нет за выбранную дату</div>';
+      status.textContent = '';
+      return;
+    }
+
+    grid.innerHTML = data.map(r => {
+      const diff = r.Value - r.Previous;
+      const pct  = r.Previous ? ((diff / r.Previous) * 100).toFixed(2) : '0.00';
+      const cls  = diff >= 0 ? 'up' : 'down';
+      const arrow = diff >= 0 ? '▲' : '▼';
+      return `
+        <div class="rate-card">
+          <div class="code">${r.CurrencyCode} · ${r.Nominal} шт.</div>
+          <div class="name">${r.CurrencyName}</div>
+          <div class="value">${r.Value.toFixed(4)} ₽</div>
+          <div class="change ${cls}">${arrow} ${Math.abs(diff).toFixed(4)} (${Math.abs(pct)}%)</div>
+        </div>`;
+    }).join('');
+    status.textContent = `${data.length} валют`;
+  } catch (e) {
+    status.textContent = 'Ошибка загрузки';
+    grid.innerHTML = '<div class="empty">Не удалось получить данные</div>';
+  }
+}
+
+// ─── Crypto Rates ─────────────────────────────────────────────────────────────
+async function loadCryptoSymbols() {
+  try {
+    const res     = await fetch(`${API_BASE}/rates/crypto/symbols`);
+    const symbols = await res.json();
+    const sel     = document.getElementById('cryptoSymbol');
+    sel.innerHTML = '<option value="">— выберите символ —</option>';
+    (symbols || []).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+    if (symbols && symbols.length > 0) {
+      sel.value = symbols[0];
+    }
+  } catch {}
+}
+
+async function loadCryptoRates() {
+  const symbol = document.getElementById('cryptoSymbol').value;
+  const status = document.getElementById('cryptoStatus');
+  const cont   = document.getElementById('cryptoRatesContainer');
+
+  if (!symbol) { cont.innerHTML = '<div class="empty">Выберите символ</div>'; return; }
+  status.textContent = 'Загрузка...';
+
+  try {
+    const res  = await fetch(`${API_BASE}/rates/crypto/history?symbol=${symbol}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      cont.innerHTML = '<div class="empty">Данных нет</div>';
+      status.textContent = '';
+      return;
+    }
+
+    const latest = data[0];
+    cont.innerHTML = `
+      <div class="grid grid-3" style="margin-bottom:16px">
+        <div class="rate-card"><div class="code">Цена (USDT)</div><div class="value">${fmt(latest.Close)}</div></div>
+        <div class="rate-card"><div class="code">Цена (RUB)</div><div class="value">${fmt(latest.PriceRUB)} ₽</div></div>
+        <div class="rate-card"><div class="code">Объём</div><div class="value">${fmt(latest.Volume)}</div></div>
+        <div class="rate-card"><div class="code">High</div><div class="value" style="color:#48bb78">${fmt(latest.High)}</div></div>
+        <div class="rate-card"><div class="code">Low</div><div class="value" style="color:#fc8181">${fmt(latest.Low)}</div></div>
+        <div class="rate-card"><div class="code">Open</div><div class="value">${fmt(latest.Open)}</div></div>
+      </div>
+      <div class="section-title">Последние записи</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Время</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th><th>₽</th></tr></thead>
+          <tbody>${data.slice(0, 20).map(r => `
+            <tr>
+              <td>${new Date(r.Timestamp).toLocaleString('ru')}</td>
+              <td>${fmt(r.Open)}</td>
+              <td style="color:#48bb78">${fmt(r.High)}</td>
+              <td style="color:#fc8181">${fmt(r.Low)}</td>
+              <td>${fmt(r.Close)}</td>
+              <td>${fmt(r.Volume)}</td>
+              <td>${fmt(r.PriceRUB)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    status.textContent = `${data.length} записей`;
+  } catch (e) {
+    status.textContent = 'Ошибка';
+    cont.innerHTML = '<div class="empty">Не удалось получить данные</div>';
+  }
+}
+
+function fmt(n) {
+  if (n === undefined || n === null) return '—';
+  return Number(n).toLocaleString('ru', { maximumFractionDigits: 4 });
+}
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+function toggleChartType() {
+  const type = document.getElementById('chartType').value;
+  document.getElementById('chartCode').placeholder = type === 'cbr' ? 'USD' : 'BTCUSDT';
+}
+
+async function loadChart() {
+  const type  = document.getElementById('chartType').value;
+  const code  = document.getElementById('chartCode').value.trim();
+  const from  = document.getElementById('chartFrom').value;
+  const to    = document.getElementById('chartTo').value;
+
+  if (!code || !from || !to) { alert('Заполните все поля'); return; }
+
+  let url, labels, values, label2;
+  try {
+    if (type === 'cbr') {
+      const res  = await fetch(`${API_BASE}/rates/cbr/range?code=${code}&from=${from}&to=${to}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) { alert('Нет данных'); return; }
+      const sorted = data.sort((a, b) => new Date(a.Date) - new Date(b.Date));
+      labels = sorted.map(r => r.Date.slice(0, 10));
+      values = sorted.map(r => r.Value);
+      label2 = `${code} / RUB`;
+    } else {
+      const res  = await fetch(`${API_BASE}/rates/crypto/history/range?symbol=${code}&from=${from}&to=${to}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) { alert('Нет данных'); return; }
+      const sorted = data.sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+      labels = sorted.map(r => new Date(r.Timestamp).toLocaleDateString('ru'));
+      values = sorted.map(r => r.Close);
+      label2 = `${code} Close (USDT)`;
+    }
+
+    renderChart(labels, values, label2);
+  } catch (e) {
+    alert('Ошибка загрузки данных');
+  }
+}
+
+function renderChart(labels, values, label) {
+  if (mainChart) mainChart.destroy();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data: values,
+        borderColor: '#63b3ed',
+        backgroundColor: 'rgba(99,179,237,.1)',
+        borderWidth: 2,
+        pointRadius: labels.length > 60 ? 0 : 3,
+        tension: 0.3,
+        fill: true,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#a0aec0' } },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          titleColor: '#e2e8f0',
+          bodyColor: '#a0aec0',
+          borderColor: '#2d3748',
+          borderWidth: 1,
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#718096', maxTicksLimit: 10 }, grid: { color: '#2d3748' } },
+        y: { ticks: { color: '#718096' }, grid: { color: '#2d3748' } },
+      },
+    },
+  });
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+function initSubscriptionsTab() {
+  const warn    = document.getElementById('subsAuthWarn');
+  const content = document.getElementById('subsContent');
+  if (!token) {
+    warn.style.display = 'block';
+    content.style.display = 'none';
+    return;
+  }
+  warn.style.display = 'none';
+  content.style.display = 'block';
+  loadSubscriptions();
+}
+
+async function loadSubscriptions() {
+  const list = document.getElementById('subsList');
+  list.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const [cbrRes, cryptoRes] = await Promise.all([
+      fetch(`${API_BASE}/notifications/subscriptions/cbr`, { headers: authHeaders() }),
+      fetch(`${API_BASE}/notifications/subscriptions/crypto`, { headers: authHeaders() }),
+    ]);
+    const cbr    = await cbrRes.json().catch(() => []);
+    const crypto = await cryptoRes.json().catch(() => []);
+
+    const all = [
+      ...(cbr || []).map(s => ({ type: 'cbr', symbol: s })),
+      ...(crypto || []).map(s => ({ type: 'crypto', symbol: s })),
+    ];
+
+    if (all.length === 0) {
+      list.innerHTML = '<div class="empty">Подписок нет</div>';
+      return;
+    }
+
+    list.innerHTML = all.map(s => `
+      <div class="sub-item">
+        <span class="label">${s.symbol}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge">${s.type.toUpperCase()}</span>
+          <button class="btn danger" style="padding:4px 10px;font-size:.75rem"
+            onclick="removeSubscription('${s.type}','${s.symbol}')">✕</button>
+        </div>
+      </div>`).join('');
+  } catch {
+    list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+  }
+}
+
+async function addSubscription() {
+  const type   = document.getElementById('subType').value;
+  const symbol = document.getElementById('subSymbol').value.trim().toUpperCase();
+  const msg    = document.getElementById('subMsg');
+
+  if (!symbol) { msg.textContent = 'Введите символ'; return; }
+
+  try {
+    const res = await fetch(`${API_BASE}/notifications/subscriptions/${type}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ symbol }),
+    });
+    if (res.ok) {
+      msg.textContent = '✓ Подписано';
+      document.getElementById('subSymbol').value = '';
+      loadSubscriptions();
+    } else {
+      const d = await res.json();
+      msg.textContent = d.error || 'Ошибка';
+    }
+  } catch { msg.textContent = 'Ошибка соединения'; }
+}
+
+async function removeSubscription(type, symbol) {
+  try {
+    await fetch(`${API_BASE}/notifications/subscriptions/${type}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ symbol }),
+    });
+    loadSubscriptions();
+  } catch {}
+}
+
+function authHeaders() {
+  return token ? { Authorization: 'Bearer ' + token } : {};
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+async function exportCBR() {
+  const code = document.getElementById('expCbrCode').value.trim();
+  const from = document.getElementById('expCbrFrom').value;
+  const to   = document.getElementById('expCbrTo').value;
+  if (!code || !from || !to) { alert('Заполните все поля'); return; }
+
+  try {
+    const res  = await fetch(`${API_BASE}/rates/cbr/range?code=${code}&from=${from}&to=${to}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) { alert('Нет данных'); return; }
+
+    const rows = [['Дата', 'Код', 'Название', 'Номинал', 'Курс (RUB)', 'Предыдущий']];
+    data.forEach(r => rows.push([r.Date.slice(0,10), r.CurrencyCode, r.CurrencyName, r.Nominal, r.Value, r.Previous]));
+    downloadCSV(rows, `cbr_${code}_${from}_${to}.csv`);
+  } catch { alert('Ошибка'); }
+}
+
+async function exportCrypto() {
+  const symbol = document.getElementById('expCryptoSymbol').value.trim();
+  const from   = document.getElementById('expCryptoFrom').value;
+  const to     = document.getElementById('expCryptoTo').value;
+  if (!symbol || !from || !to) { alert('Заполните все поля'); return; }
+
+  try {
+    const res  = await fetch(`${API_BASE}/rates/crypto/history/range?symbol=${symbol}&from=${from}&to=${to}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) { alert('Нет данных'); return; }
+
+    const rows = [['Время', 'Символ', 'Open', 'High', 'Low', 'Close', 'Volume', 'Цена (RUB)']];
+    data.forEach(r => rows.push([
+      new Date(r.Timestamp).toISOString(), r.Symbol,
+      r.Open, r.High, r.Low, r.Close, r.Volume, r.PriceRUB,
+    ]));
+    downloadCSV(rows, `crypto_${symbol}_${from}_${to}.csv`);
+  } catch { alert('Ошибка'); }
+}
+
+function downloadCSV(rows, filename) {
+  const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

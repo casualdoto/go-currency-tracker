@@ -136,16 +136,25 @@ func (n *Normalizer) process(ctx context.Context, data []byte) error {
 }
 
 func (n *Normalizer) normalizeCBR(ctx context.Context, raw json.RawMessage) error {
+	normalized, err := n.buildNormalizedCBR(raw)
+	if err != nil {
+		return err
+	}
+	return n.publish(ctx, normalizedCBREvent{Source: "cbr", Rates: normalized})
+}
+
+// buildNormalizedCBR parses raw CBR rates and returns normalized structs.
+// Extracted for unit-testability.
+func (n *Normalizer) buildNormalizedCBR(raw json.RawMessage) ([]normalizedCBRRate, error) {
 	var rates []rawCBRRate
 	if err := json.Unmarshal(raw, &rates); err != nil {
-		return err
+		return nil, err
 	}
 
 	normalized := make([]normalizedCBRRate, 0, len(rates))
 	for _, r := range rates {
 		date, err := time.Parse("2006/01/02 15:04:05", r.Date)
 		if err != nil {
-			// try RFC3339 and ISO date
 			date, err = time.Parse("2006-01-02T15:04:05-07:00", r.Date)
 			if err != nil {
 				date = time.Now().Truncate(24 * time.Hour)
@@ -160,18 +169,25 @@ func (n *Normalizer) normalizeCBR(ctx context.Context, raw json.RawMessage) erro
 			PreviousRUB:  r.Previous,
 		})
 	}
-
-	event := normalizedCBREvent{Source: "cbr", Rates: normalized}
-	return n.publish(ctx, event)
+	return normalized, nil
 }
 
 func (n *Normalizer) normalizeCrypto(ctx context.Context, raw json.RawMessage) error {
-	var rates []rawCryptoRate
-	if err := json.Unmarshal(raw, &rates); err != nil {
+	normalized, err := n.buildNormalizedCrypto(raw)
+	if err != nil {
 		return err
 	}
+	return n.publish(ctx, normalizedCryptoEvent{Source: "binance", Rates: normalized})
+}
 
-	// Get USD/RUB rate from CBR for conversion
+// buildNormalizedCrypto fetches USD/RUB, calculates PriceRUB and returns
+// normalized structs. Extracted for unit-testability.
+func (n *Normalizer) buildNormalizedCrypto(raw json.RawMessage) ([]normalizedCryptoRate, error) {
+	var rates []rawCryptoRate
+	if err := json.Unmarshal(raw, &rates); err != nil {
+		return nil, err
+	}
+
 	usdRUB, err := n.getUSDRUBRate()
 	if err != nil {
 		log.Printf("normalizer: failed to get USD/RUB rate: %v, using 1.0", err)
@@ -191,9 +207,7 @@ func (n *Normalizer) normalizeCrypto(ctx context.Context, raw json.RawMessage) e
 			PriceRUB:  r.Close * usdRUB,
 		})
 	}
-
-	event := normalizedCryptoEvent{Source: "binance", Rates: normalized}
-	return n.publish(ctx, event)
+	return normalized, nil
 }
 
 type cbrResp struct {

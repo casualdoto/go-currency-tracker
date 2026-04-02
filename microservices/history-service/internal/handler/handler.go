@@ -9,11 +9,12 @@ import (
 )
 
 type Handler struct {
-	db *storage.PostgresDB
+	pg *storage.PostgresDB
+	ch *storage.ClickHouseDB
 }
 
-func New(db *storage.PostgresDB) *Handler {
-	return &Handler{db: db}
+func New(pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Handler {
+	return &Handler{pg: pg, ch: ch}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -41,7 +42,7 @@ func (h *Handler) GetCBRHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rates, err := h.db.GetCurrencyRatesByDate(date)
+	rates, err := h.pg.GetCurrencyRatesByDate(date)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -71,7 +72,7 @@ func (h *Handler) GetCBRHistoryRange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rates, err := h.db.GetCurrencyRatesByDateRange(code, from, to)
+	rates, err := h.pg.GetCurrencyRatesByDateRange(code, from, to)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -86,8 +87,7 @@ func (h *Handler) GetCryptoHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "symbol is required")
 		return
 	}
-	limit := 100
-	rates, err := h.db.GetCryptoRatesBySymbol(symbol, limit)
+	rates, err := h.ch.GetCryptoRatesBySymbol(symbol, 100)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -117,7 +117,7 @@ func (h *Handler) GetCryptoHistoryRange(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	rates, err := h.db.GetCryptoRatesByDateRange(symbol, from, to)
+	rates, err := h.ch.GetCryptoRatesByDateRange(symbol, from, to)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
@@ -127,7 +127,7 @@ func (h *Handler) GetCryptoHistoryRange(w http.ResponseWriter, r *http.Request) 
 
 // GET /history/crypto/symbols
 func (h *Handler) GetCryptoSymbols(w http.ResponseWriter, r *http.Request) {
-	symbols, err := h.db.GetAvailableCryptoSymbols()
+	symbols, err := h.ch.GetAvailableCryptoSymbols()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "database error")
 		return
