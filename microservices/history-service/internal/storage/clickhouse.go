@@ -101,12 +101,14 @@ func (c *ClickHouseDB) GetCryptoRatesBySymbol(symbol string, limit int) ([]Crypt
 }
 
 func (c *ClickHouseDB) GetCryptoRatesByDateRange(symbol string, start, end time.Time) ([]CryptoRate, error) {
+	// start/end are UTC midnights for YYYY-MM-DD from the API; include the full "to" calendar day.
+	endExclusive := end.AddDate(0, 0, 1)
 	rows, err := c.conn.Query(context.Background(), `
 		SELECT timestamp, symbol, open, high, low, close, volume, price_rub, created_at
 		FROM crypto_rates
-		WHERE symbol = ? AND timestamp >= ? AND timestamp <= ?
-		ORDER BY timestamp DESC
-	`, symbol, start, end)
+		WHERE symbol = ? AND timestamp >= ? AND timestamp < ?
+		ORDER BY timestamp ASC
+	`, symbol, start, endExclusive)
 	if err != nil {
 		return nil, err
 	}

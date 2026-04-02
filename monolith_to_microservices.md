@@ -131,7 +131,16 @@
 
 ---
 
-### 9. Web UI Service (SPA)
+### 9. Перенос таблицы из Postgres в Clickhouse
+
+- [x] Создать схему ClickHouse (и удалить из Postgres):
+  - [x] Таблица `crypto_rates` (timestamp, symbol, open, high, low, close, volume, price_rub, created_at)
+  - [x] Уникальность по `(timestamp, symbol)` через ReplacingMergeTree ORDER BY
+  - [x] Индексы по `timestamp` и `symbol` через ORDER BY ключ
+
+ ---
+  
+### 10. Web UI Service (SPA)
 
 - [x] Реализовать визуализацию текущих курсов валют и криптовалют
 - [x] Реализовать исторические графики
@@ -139,25 +148,15 @@
 - [x] Реализовать экспорт данных
 - [x] Все запросы — только через API Gateway
 
-
-
 ---
 
-### 10. Тестирование и интеграция
+### 11. Тестирование и интеграция
 
 - [x] Написать юнит-тесты для каждого сервиса
 - [ ] Написать интеграционные тесты для межсервисного взаимодействия
 - [ ] Проверить сценарий end-to-end: CBR/Binance → Kafka → History → API → Web UI
 - [ ] Проверить сценарий уведомлений: курс срабатывает → Notification → Telegram Bot
 - [ ] Нагрузочное тестирование ключевых сервисов
-
-### 11. Перенос таблицы из Postgres в Clickhouse
-
-- [x] Создать схему ClickHouse (и удалить из Postgres):
-  - [x] Таблица `crypto_rates` (timestamp, symbol, open, high, low, close, volume, price_rub, created_at)
-  - [x] Уникальность по `(timestamp, symbol)` через ReplacingMergeTree ORDER BY
-  - [x] Индексы по `timestamp` и `symbol` через ORDER BY ключ
-
 
 ---
 
