@@ -7,7 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/cbrbackfill"
 	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/config"
+	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/cryptobackfill"
 	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/handler"
 	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/storage"
 	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/subscriber"
@@ -62,8 +64,10 @@ func main() {
 		}
 	}()
 
-	// Setup HTTP router
-	h := handler.New(pg, ch)
+	// Setup HTTP router (optional CBR archive client when CBR_BASE_URL is set)
+	cbrClient := cbrbackfill.New(cfg.CBRBaseURL)
+	cryptoBackfill := cryptobackfill.New(cfg.BinanceAPIBase, cbrClient)
+	h := handler.New(pg, ch, cbrClient, cryptoBackfill)
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)

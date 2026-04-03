@@ -21,9 +21,10 @@ type Gateway struct {
 }
 
 func New(cfg *config.Config) *Gateway {
+	// History-service crypto range can chain two Binance calls plus ClickHouse; 30s caused frequent gateway timeouts.
 	return &Gateway{
 		cfg:        cfg,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{Timeout: 120 * time.Second},
 	}
 }
 

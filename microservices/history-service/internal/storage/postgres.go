@@ -106,6 +106,21 @@ func (p *PostgresDB) GetCurrencyRatesByDate(date time.Time) ([]CurrencyRate, err
 	return scanCurrencyRates(rows)
 }
 
+// HasCBRRateOnDay reports whether there is at least one row for code on the given calendar date.
+func (p *PostgresDB) HasCBRRateOnDay(code string, day time.Time) (bool, error) {
+	ds := day.Format("2006-01-02")
+	var ok bool
+	err := p.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM cbr_rates WHERE currency_code = $1 AND date = $2::date
+		)
+	`, code, ds).Scan(&ok)
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 func (p *PostgresDB) GetCurrencyRatesByDateRange(code string, start, end time.Time) ([]CurrencyRate, error) {
 	rows, err := p.db.Query(`
 		SELECT id, date, currency_code, currency_name, nominal, value, previous, created_at

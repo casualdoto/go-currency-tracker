@@ -45,6 +45,16 @@ func (b *Bot) Start() {
 	b.bot.Handle("/crypto_subscribe", b.handleCryptoSubscribe)
 	b.bot.Handle("/crypto_unsubscribe", b.handleCryptoUnsubscribe)
 
+	// If a webhook was set (e.g. from another deploy), getUpdates receives nothing.
+	if _, err := b.bot.Raw("deleteWebhook", map[string]interface{}{}); err != nil {
+		log.Printf("telegram: deleteWebhook: %v", err)
+	} else {
+		log.Printf("telegram: webhook cleared, long polling enabled")
+	}
+	if b.bot.Me != nil {
+		log.Printf("telegram: bot @%s ready", b.bot.Me.Username)
+	}
+
 	go b.bot.Start()
 }
 
@@ -164,7 +174,7 @@ func (b *Bot) handleHistory(m *telebot.Message) {
 	currency := strings.ToUpper(args[1])
 	to := time.Now()
 	from := to.AddDate(0, 0, -7)
-	url := fmt.Sprintf("%s/history/cbr/range?code=%s&from=%s&to=%s",
+	url := fmt.Sprintf("%s/rates/cbr/range?code=%s&from=%s&to=%s",
 		b.cfg.APIGatewayURL, currency,
 		from.Format("2006-01-02"), to.Format("2006-01-02"))
 
@@ -249,6 +259,3 @@ func (b *Bot) deleteFromNotification(path string, body any) error {
 	}
 	return nil
 }
-
-// suppress unused import warnings
-var _ = log.Printf

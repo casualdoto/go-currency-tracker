@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	// PostgreSQL (CBR rates)
@@ -20,6 +23,11 @@ type Config struct {
 
 	KafkaBrokers string
 	ServerPort   string
+
+	// CBRBaseURL is used to pull missing archive daily_json into PostgreSQL (same host as data-collector).
+	CBRBaseURL string
+	// BinanceAPIBase is the REST root for klines backfill (empty = https://api.binance.com).
+	BinanceAPIBase string
 }
 
 func Load() *Config {
@@ -37,8 +45,10 @@ func Load() *Config {
 		CHUser:     getEnv("CH_USER", "default"),
 		CHPassword: getEnv("CH_PASSWORD", ""),
 
-		KafkaBrokers: getEnv("KAFKA_BROKERS", "localhost:9092"),
-		ServerPort:    getEnv("SERVER_PORT", "8084"),
+		KafkaBrokers:   getEnv("KAFKA_BROKERS", "localhost:9092"),
+		ServerPort:     getEnv("SERVER_PORT", "8084"),
+		CBRBaseURL:     getEnvAllowEmpty("CBR_BASE_URL", "https://www.cbr-xml-daily.ru"),
+		BinanceAPIBase: strings.TrimSpace(os.Getenv("BINANCE_API_BASE")),
 	}
 }
 
@@ -47,4 +57,13 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// getEnvAllowEmpty returns def if the variable is unset; if set to empty string, returns "" (disables CBR backfill).
+func getEnvAllowEmpty(key, def string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	return strings.TrimSpace(v)
 }
