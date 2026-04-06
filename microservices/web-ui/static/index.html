@@ -12,12 +12,6 @@
 </head>
 <body>
     <div class="container mt-4">
-        <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 mb-2">
-            <div class="d-flex align-items-center gap-2">
-                <span id="userLabel" class="text-muted small"></span>
-                <button type="button" class="btn btn-outline-primary btn-sm" id="authBtn" onclick="handleAuthBtn()">Log in</button>
-            </div>
-        </div>
         <h1 class="text-center mb-4">Currency Rate Analysis</h1>
 
         <div class="row">
@@ -158,36 +152,6 @@
                             <p id="loading-status" class="text-muted">Retrieving currency data from database...</p>
                         </div>
                         <canvas id="currency-chart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="authModal" tabindex="-1">
-        <div class="modal-dialog modal-sm">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="authModalTitle">Log in</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="authMsg"></div>
-                    <div class="mb-3">
-                        <label class="form-label small" for="authEmail">Email</label>
-                        <input type="email" class="form-control" id="authEmail" autocomplete="username">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small" for="authPassword">Password</label>
-                        <input type="password" class="form-control" id="authPassword" autocomplete="current-password"
-                            onkeydown="if(event.key==='Enter') submitAuth()">
-                    </div>
-                    <div class="d-grid">
-                        <button type="button" class="btn btn-primary" onclick="submitAuth()">Continue</button>
-                    </div>
-                    <div class="text-center mt-3 small text-muted">
-                        <span id="authToggleText">No account?</span>
-                        <a href="#" onclick="toggleAuthMode(); return false;" id="authToggleLink">Sign up</a>
                     </div>
                 </div>
             </div>

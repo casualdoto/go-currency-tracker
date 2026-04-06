@@ -1,22 +1,6 @@
 version: '3.8'
 
 services:
-  postgres-auth:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: auth_password
-      POSTGRES_DB: auth_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_auth_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   postgres-history:
     image: postgres:15-alpine
     environment:
@@ -107,23 +91,6 @@ services:
         echo 'Topics created successfully'
       "
 
-  auth-service:
-    build: ./auth-service
-    ports:
-      - "8082:8082"
-    environment:
-      DB_HOST: postgres-auth
-      DB_PORT: 5432
-      DB_USER: auth_user
-      DB_PASSWORD: auth_password
-      DB_NAME: auth_db
-      DB_SSLMODE: disable
-      JWT_SECRET: supersecretjwtkey
-      SERVER_PORT: 8082
-    depends_on:
-      postgres-auth:
-        condition: service_healthy
-
   data-collector:
     build: ./data-collector
     environment:
@@ -212,13 +179,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AUTH_SERVICE_URL: http://auth-service:8082
       HISTORY_SERVICE_URL: http://history-service:8084
       NOTIFICATION_SERVICE_URL: http://notification-service:8085
-      JWT_SECRET: supersecretjwtkey
       SERVER_PORT: 8080
     depends_on:
-      - auth-service
       - history-service
       - notification-service
 
@@ -233,6 +197,5 @@ services:
       - api-gateway
 
 volumes:
-  postgres_auth_data:
   postgres_history_data:
   clickhouse_data:

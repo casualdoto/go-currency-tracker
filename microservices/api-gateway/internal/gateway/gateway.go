@@ -40,9 +40,6 @@ func (g *Gateway) Routes() http.Handler {
 		w.Write([]byte("pong"))
 	})
 
-	// Auth routes — public (no JWT required)
-	r.Mount("/auth", g.reverseProxy(g.cfg.AuthServiceURL, "/auth"))
-
 	// History routes — public (read-only data)
 	r.Mount("/history", g.reverseProxy(g.cfg.HistoryServiceURL, "/history"))
 
@@ -53,11 +50,8 @@ func (g *Gateway) Routes() http.Handler {
 	r.Get("/rates/crypto/history", g.proxyTo(g.cfg.HistoryServiceURL+"/history/crypto"))
 	r.Get("/rates/crypto/history/range", g.proxyTo(g.cfg.HistoryServiceURL+"/history/crypto/range"))
 
-	// Notification / subscription routes — require JWT
-	r.Group(func(r chi.Router) {
-		r.Use(g.jwtMiddleware)
-		r.Mount("/notifications", g.reverseProxy(g.cfg.NotificationServiceURL, "/notifications"))
-	})
+	// Notification / subscription routes
+	r.Mount("/notifications", g.reverseProxy(g.cfg.NotificationServiceURL, "/notifications"))
 
 	return r
 }
@@ -109,36 +103,6 @@ func (g *Gateway) proxyTo(targetURL string) http.HandlerFunc {
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	}
-}
-
-// jwtMiddleware validates the Bearer token via Auth Service.
-func (g *Gateway) jwtMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if auth == "" {
-			http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
-			return
-		}
-
-		req, err := http.NewRequest(http.MethodGet, g.cfg.AuthServiceURL+"/validate", nil)
-		if err != nil {
-			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-			return
-		}
-		req.Header.Set("Authorization", auth)
-
-		resp, err := g.httpClient.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if resp != nil {
-				resp.Body.Close()
-			}
-			http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
-			return
-		}
-		resp.Body.Close()
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
