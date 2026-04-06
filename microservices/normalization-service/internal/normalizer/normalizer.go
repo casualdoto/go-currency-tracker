@@ -20,10 +20,11 @@ const (
 
 // Normalizer reads from raw-rates, normalizes, and publishes to normalized-rates.
 type Normalizer struct {
-	reader     *kafka.Reader
-	writer     *kafka.Writer
-	cbrURL     string
-	httpClient *http.Client
+	reader      *kafka.Reader
+	writer      *kafka.Writer
+	cbrURL      string
+	httpClient  *http.Client
+	lastUSDRUB  float64 // last successfully fetched USD/RUB rate; used as fallback
 }
 
 func New(brokers, cbrURL string) *Normalizer {
@@ -190,8 +191,15 @@ func (n *Normalizer) buildNormalizedCrypto(raw json.RawMessage) ([]normalizedCry
 
 	usdRUB, err := n.getUSDRUBRate()
 	if err != nil {
-		log.Printf("normalizer: failed to get USD/RUB rate: %v, using 1.0", err)
-		usdRUB = 1.0
+		if n.lastUSDRUB != 0 {
+			log.Printf("normalizer: failed to get USD/RUB rate: %v, using last known rate %.4f", err, n.lastUSDRUB)
+			usdRUB = n.lastUSDRUB
+		} else {
+			log.Printf("normalizer: failed to get USD/RUB rate: %v, no cached rate available, using 1.0", err)
+			usdRUB = 1.0
+		}
+	} else {
+		n.lastUSDRUB = usdRUB
 	}
 
 	normalized := make([]normalizedCryptoRate, 0, len(rates))

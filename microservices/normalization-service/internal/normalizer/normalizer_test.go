@@ -140,8 +140,8 @@ func TestNormalizeCrypto_priceRUB(t *testing.T) {
 	}
 }
 
-func TestNormalizeCrypto_cbrUnavailable_fallback(t *testing.T) {
-	// Point to a server that always errors.
+func TestNormalizeCrypto_cbrUnavailable_noCache_fallbackTo1(t *testing.T) {
+	// No cached rate and CBR is unreachable — should fall back to 1.0.
 	n := newTestNormalizer("http://127.0.0.1:1")
 
 	rates := []rawCryptoRate{
@@ -149,13 +149,52 @@ func TestNormalizeCrypto_cbrUnavailable_fallback(t *testing.T) {
 	}
 	raw, _ := json.Marshal(rates)
 
-	// Should not fail — fallback usdRUB = 1.0
 	result, err := n.buildNormalizedCrypto(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result[0].PriceRUB != 50000.0 {
 		t.Errorf("expected fallback PriceRUB=50000, got %f", result[0].PriceRUB)
+	}
+}
+
+func TestNormalizeCrypto_cbrUnavailable_usesLastKnownRate(t *testing.T) {
+	// CBR is unreachable but a cached rate exists — should use the cached value.
+	n := newTestNormalizer("http://127.0.0.1:1")
+	n.lastUSDRUB = 92.5
+
+	rates := []rawCryptoRate{
+		{Symbol: "BTCUSDT", Timestamp: time.Now(), Close: 50000},
+	}
+	raw, _ := json.Marshal(rates)
+
+	result, err := n.buildNormalizedCrypto(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := 50000.0 * 92.5
+	if result[0].PriceRUB != expected {
+		t.Errorf("expected PriceRUB=%f (cached rate), got %f", expected, result[0].PriceRUB)
+	}
+}
+
+func TestNormalizeCrypto_successUpdatesCache(t *testing.T) {
+	// Successful fetch should update lastUSDRUB.
+	srv := stubCBRServer(t, 95.0)
+	defer srv.Close()
+
+	n := newTestNormalizer(srv.URL)
+
+	rates := []rawCryptoRate{
+		{Symbol: "BTCUSDT", Timestamp: time.Now(), Close: 1000},
+	}
+	raw, _ := json.Marshal(rates)
+
+	if _, err := n.buildNormalizedCrypto(raw); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n.lastUSDRUB != 95.0 {
+		t.Errorf("expected lastUSDRUB=95.0, got %f", n.lastUSDRUB)
 	}
 }
 
