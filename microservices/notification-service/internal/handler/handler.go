@@ -5,15 +5,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-
-	"github.com/casualdoto/go-currency-tracker/microservices/notification-service/internal/store"
 )
 
-type Handler struct {
-	store *store.RedisStore
+// SubscriptionStore is the interface the Handler depends on for managing subscriptions.
+// *store.RedisStore satisfies this interface.
+type SubscriptionStore interface {
+	SubscribeCBR(ctx context.Context, telegramID int64, currency string) error
+	UnsubscribeCBR(ctx context.Context, telegramID int64, currency string) error
+	GetCBRSubscriptions(ctx context.Context, telegramID int64) ([]string, error)
+	SubscribeCrypto(ctx context.Context, telegramID int64, symbol string) error
+	UnsubscribeCrypto(ctx context.Context, telegramID int64, symbol string) error
+	GetCryptoSubscriptions(ctx context.Context, telegramID int64) ([]string, error)
 }
 
-func New(s *store.RedisStore) *Handler {
+type Handler struct {
+	store SubscriptionStore
+}
+
+func New(s SubscriptionStore) *Handler {
 	return &Handler{store: s}
 }
 
