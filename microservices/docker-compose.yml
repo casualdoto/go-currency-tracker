@@ -169,7 +169,6 @@ services:
     environment:
       API_GATEWAY_URL: http://api-gateway:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:8085
-      REDIS_ADDR: redis:6379
     depends_on:
       - api-gateway
       - notification-service
