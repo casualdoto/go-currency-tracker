@@ -59,6 +59,25 @@ type rawCBREvent struct {
 	Rates  []rawCBRRate `json:"rates"`
 }
 
+// parseCBRResponse converts a decoded CBR API response into a slice of rawCBRRate.
+// Pure function — no I/O, directly testable.
+func parseCBRResponse(data cbrResponse, collectedAt time.Time) []rawCBRRate {
+	rates := make([]rawCBRRate, 0, len(data.Valute))
+	for _, v := range data.Valute {
+		rates = append(rates, rawCBRRate{
+			Date:        data.Date,
+			CharCode:    v.CharCode,
+			NumCode:     v.NumCode,
+			Nominal:     v.Nominal,
+			Name:        v.Name,
+			Value:       v.Value,
+			Previous:    v.Previous,
+			CollectedAt: collectedAt,
+		})
+	}
+	return rates
+}
+
 func (c *CBRCollector) Collect() error {
 	url := fmt.Sprintf("%s/daily_json.js", c.baseURL)
 	resp, err := c.client.Get(url)
@@ -77,19 +96,7 @@ func (c *CBRCollector) Collect() error {
 	}
 
 	now := time.Now()
-	rates := make([]rawCBRRate, 0, len(data.Valute))
-	for _, v := range data.Valute {
-		rates = append(rates, rawCBRRate{
-			Date:        data.Date,
-			CharCode:    v.CharCode,
-			NumCode:     v.NumCode,
-			Nominal:     v.Nominal,
-			Name:        v.Name,
-			Value:       v.Value,
-			Previous:    v.Previous,
-			CollectedAt: now,
-		})
-	}
+	rates := parseCBRResponse(data, now)
 
 	event := rawCBREvent{Source: "cbr", Rates: rates}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
