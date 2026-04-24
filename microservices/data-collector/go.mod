@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/adshao/go-binance/v2 v2.8.3
+	github.com/casualdoto/go-currency-tracker/microservices/shared v0.0.0
 	github.com/segmentio/kafka-go v0.4.47
 )
 
@@ -17,3 +18,5 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 )
+
+replace github.com/casualdoto/go-currency-tracker/microservices/shared => ../shared

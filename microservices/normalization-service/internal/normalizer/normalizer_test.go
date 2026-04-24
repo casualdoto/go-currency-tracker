@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -36,7 +38,7 @@ func stubCBRServer(t *testing.T, usdValue float64) *httptest.Server {
 func TestNormalizeCBR_basic(t *testing.T) {
 	n := newTestNormalizer("")
 
-	rates := []rawCBRRate{
+	rates := []events.RawCBRRate{
 		{
 			Date:     "2024-01-15T00:00:00+03:00",
 			CharCode: "USD",
@@ -92,7 +94,7 @@ func TestNormalizeCBR_dateFormats(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			rates := []rawCBRRate{{Date: tc.dateStr, CharCode: "USD", Nominal: 1, Name: "USD", Value: 90}}
+			rates := []events.RawCBRRate{{Date: tc.dateStr, CharCode: "USD", Nominal: 1, Name: "USD", Value: 90}}
 			raw, _ := json.Marshal(rates)
 			result, err := n.buildNormalizedCBR(raw)
 			if err != nil {
@@ -116,7 +118,7 @@ func TestNormalizeCrypto_priceRUB(t *testing.T) {
 
 	n := newTestNormalizer(srv.URL)
 
-	rates := []rawCryptoRate{
+	rates := []events.RawCryptoRate{
 		{Symbol: "BTCUSDT", Timestamp: time.Now(), Open: 40000, High: 42000, Low: 39000, Close: 41000, Volume: 1.5},
 		{Symbol: "ETHUSDT", Timestamp: time.Now(), Open: 2000, High: 2100, Low: 1950, Close: 2050, Volume: 10},
 	}
@@ -144,7 +146,7 @@ func TestNormalizeCrypto_cbrUnavailable_noCache_fallbackTo1(t *testing.T) {
 	// No cached rate and CBR is unreachable — should fall back to 1.0.
 	n := newTestNormalizer("http://127.0.0.1:1")
 
-	rates := []rawCryptoRate{
+	rates := []events.RawCryptoRate{
 		{Symbol: "BTCUSDT", Timestamp: time.Now(), Close: 50000},
 	}
 	raw, _ := json.Marshal(rates)
@@ -163,7 +165,7 @@ func TestNormalizeCrypto_cbrUnavailable_usesLastKnownRate(t *testing.T) {
 	n := newTestNormalizer("http://127.0.0.1:1")
 	n.lastUSDRUB = 92.5
 
-	rates := []rawCryptoRate{
+	rates := []events.RawCryptoRate{
 		{Symbol: "BTCUSDT", Timestamp: time.Now(), Close: 50000},
 	}
 	raw, _ := json.Marshal(rates)
@@ -185,7 +187,7 @@ func TestNormalizeCrypto_successUpdatesCache(t *testing.T) {
 
 	n := newTestNormalizer(srv.URL)
 
-	rates := []rawCryptoRate{
+	rates := []events.RawCryptoRate{
 		{Symbol: "BTCUSDT", Timestamp: time.Now(), Close: 1000},
 	}
 	raw, _ := json.Marshal(rates)

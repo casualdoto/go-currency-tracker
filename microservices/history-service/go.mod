@@ -3,6 +3,8 @@ module github.com/casualdoto/go-currency-tracker/microservices/history-service
 go 1.24.1
 
 require (
+	github.com/ClickHouse/clickhouse-go/v2 v2.44.0
+	github.com/casualdoto/go-currency-tracker/microservices/shared v0.0.0
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/lib/pq v1.10.9
 	github.com/segmentio/kafka-go v0.4.47
@@ -10,7 +12,6 @@ require (
 
 require (
 	github.com/ClickHouse/ch-go v0.71.0 // indirect
-	github.com/ClickHouse/clickhouse-go/v2 v2.44.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
@@ -26,3 +27,5 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 )
+
+replace github.com/casualdoto/go-currency-tracker/microservices/shared => ../shared

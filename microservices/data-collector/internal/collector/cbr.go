@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/casualdoto/go-currency-tracker/microservices/data-collector/internal/producer"
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 )
-
-const topicRawRates = "raw-rates"
 
 // CBRCollector polls the CBR API and publishes raw CBR rates to Kafka.
 type CBRCollector struct {
@@ -29,8 +28,8 @@ func NewCBR(baseURL string, prod *producer.Producer) *CBRCollector {
 }
 
 type cbrResponse struct {
-	Date   string                 `json:"Date"`
-	Valute map[string]cbrValute   `json:"Valute"`
+	Date   string               `json:"Date"`
+	Valute map[string]cbrValute `json:"Valute"`
 }
 
 type cbrValute struct {
@@ -43,28 +42,12 @@ type cbrValute struct {
 	Previous float64 `json:"Previous"`
 }
 
-type rawCBRRate struct {
-	Date        string    `json:"date"`
-	CharCode    string    `json:"char_code"`
-	NumCode     string    `json:"num_code"`
-	Nominal     int       `json:"nominal"`
-	Name        string    `json:"name"`
-	Value       float64   `json:"value"`
-	Previous    float64   `json:"previous"`
-	CollectedAt time.Time `json:"collected_at"`
-}
-
-type rawCBREvent struct {
-	Source string       `json:"source"`
-	Rates  []rawCBRRate `json:"rates"`
-}
-
-// parseCBRResponse converts a decoded CBR API response into a slice of rawCBRRate.
+// parseCBRResponse converts a decoded CBR API response into a slice of RawCBRRate.
 // Pure function — no I/O, directly testable.
-func parseCBRResponse(data cbrResponse, collectedAt time.Time) []rawCBRRate {
-	rates := make([]rawCBRRate, 0, len(data.Valute))
+func parseCBRResponse(data cbrResponse, collectedAt time.Time) []events.RawCBRRate {
+	rates := make([]events.RawCBRRate, 0, len(data.Valute))
 	for _, v := range data.Valute {
-		rates = append(rates, rawCBRRate{
+		rates = append(rates, events.RawCBRRate{
 			Date:        data.Date,
 			CharCode:    v.CharCode,
 			NumCode:     v.NumCode,
@@ -98,11 +81,11 @@ func (c *CBRCollector) Collect() error {
 	now := time.Now()
 	rates := parseCBRResponse(data, now)
 
-	event := rawCBREvent{Source: "cbr", Rates: rates}
+	event := events.RawCBRRatesEvent{Source: events.SourceCBR, Rates: rates}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := c.prod.Publish(ctx, topicRawRates, event); err != nil {
+	if err := c.prod.Publish(ctx, events.TopicRawRates, event); err != nil {
 		return fmt.Errorf("cbr publish: %w", err)
 	}
 

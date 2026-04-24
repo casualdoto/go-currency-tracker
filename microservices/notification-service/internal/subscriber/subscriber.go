@@ -10,13 +10,11 @@ import (
 	"time"
 
 	"github.com/casualdoto/go-currency-tracker/microservices/notification-service/internal/store"
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 	"github.com/segmentio/kafka-go"
 )
 
-const (
-	topicNormalizedRates = "normalized-rates"
-	groupID              = "notification-service"
-)
+const groupID = "notification-service"
 
 type Subscriber struct {
 	reader     *kafka.Reader
@@ -29,7 +27,7 @@ func New(brokers string, s *store.RedisStore, botToken string) *Subscriber {
 	brokerList := strings.Split(brokers, ",")
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  brokerList,
-		Topic:    topicNormalizedRates,
+		Topic:    events.TopicNormalizedRates,
 		GroupID:  groupID,
 		MinBytes: 1,
 		MaxBytes: 10e6,
@@ -60,22 +58,17 @@ type baseEvent struct {
 	Rates  json.RawMessage `json:"rates"`
 }
 
-type normalizedCryptoRate struct {
-	Symbol   string  `json:"symbol"`
-	PriceRUB float64 `json:"price_rub"`
-}
-
 func (s *Subscriber) process(ctx context.Context, data []byte) error {
 	var evt baseEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		return err
 	}
 
-	if evt.Source != "binance" {
+	if evt.Source != string(events.SourceBinance) {
 		return nil // only notify on crypto changes for now
 	}
 
-	var rates []normalizedCryptoRate
+	var rates []events.NormalizedCryptoRate
 	if err := json.Unmarshal(evt.Rates, &rates); err != nil {
 		return err
 	}

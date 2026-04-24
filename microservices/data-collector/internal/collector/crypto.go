@@ -12,6 +12,7 @@ import (
 
 	"github.com/adshao/go-binance/v2"
 	"github.com/casualdoto/go-currency-tracker/microservices/data-collector/internal/producer"
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 )
 
 var trackedSymbols = []string{
@@ -41,25 +42,9 @@ func NewCrypto(prod *producer.Producer) *CryptoCollector {
 	return &CryptoCollector{prod: prod, client: bc}
 }
 
-type rawCryptoRate struct {
-	Symbol      string    `json:"symbol"`
-	Timestamp   time.Time `json:"timestamp"`
-	Open        float64   `json:"open"`
-	High        float64   `json:"high"`
-	Low         float64   `json:"low"`
-	Close       float64   `json:"close"`
-	Volume      float64   `json:"volume"`
-	CollectedAt time.Time `json:"collected_at"`
-}
-
-type rawCryptoEvent struct {
-	Source string          `json:"source"`
-	Rates  []rawCryptoRate `json:"rates"`
-}
-
 func (c *CryptoCollector) Collect() error {
 	now := time.Now()
-	rates := make([]rawCryptoRate, 0, len(trackedSymbols))
+	rates := make([]events.RawCryptoRate, 0, len(trackedSymbols))
 
 	for _, symbol := range trackedSymbols {
 		ticker, err := c.client.NewListPriceChangeStatsService().Symbol(symbol).Do(context.Background())
@@ -77,7 +62,7 @@ func (c *CryptoCollector) Collect() error {
 		closeP, _ := strconv.ParseFloat(t.LastPrice, 64)
 		vol, _ := strconv.ParseFloat(t.Volume, 64)
 
-		rates = append(rates, rawCryptoRate{
+		rates = append(rates, events.RawCryptoRate{
 			Symbol:      symbol,
 			Timestamp:   now,
 			Open:        open,
@@ -93,11 +78,11 @@ func (c *CryptoCollector) Collect() error {
 		return fmt.Errorf("no crypto rates collected")
 	}
 
-	event := rawCryptoEvent{Source: "binance", Rates: rates}
+	event := events.RawCryptoRatesEvent{Source: events.SourceBinance, Rates: rates}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := c.prod.Publish(ctx, topicRawRates, event); err != nil {
+	if err := c.prod.Publish(ctx, events.TopicRawRates, event); err != nil {
 		return fmt.Errorf("crypto publish: %w", err)
 	}
 

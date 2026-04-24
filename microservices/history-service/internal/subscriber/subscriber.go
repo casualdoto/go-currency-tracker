@@ -5,16 +5,13 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/casualdoto/go-currency-tracker/microservices/history-service/internal/storage"
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 	"github.com/segmentio/kafka-go"
 )
 
-const (
-	topicNormalizedRates = "normalized-rates"
-	groupID              = "history-service"
-)
+const groupID = "history-service"
 
 type Subscriber struct {
 	reader *kafka.Reader
@@ -26,7 +23,7 @@ func New(brokers string, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Subs
 	brokerList := strings.Split(brokers, ",")
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  brokerList,
-		Topic:    topicNormalizedRates,
+		Topic:    events.TopicNormalizedRates,
 		GroupID:  groupID,
 		MinBytes: 1,
 		MaxBytes: 10e6,
@@ -52,26 +49,6 @@ type baseEvent struct {
 	Rates  json.RawMessage `json:"rates"`
 }
 
-type normalizedCBRRate struct {
-	Date         time.Time `json:"date"`
-	CurrencyCode string    `json:"currency_code"`
-	CurrencyName string    `json:"currency_name"`
-	Nominal      int       `json:"nominal"`
-	ValueRUB     float64   `json:"value_rub"`
-	PreviousRUB  float64   `json:"previous_rub"`
-}
-
-type normalizedCryptoRate struct {
-	Symbol    string    `json:"symbol"`
-	Timestamp time.Time `json:"timestamp"`
-	Open      float64   `json:"open"`
-	High      float64   `json:"high"`
-	Low       float64   `json:"low"`
-	Close     float64   `json:"close"`
-	Volume    float64   `json:"volume"`
-	PriceRUB  float64   `json:"price_rub"`
-}
-
 func (s *Subscriber) process(data []byte) error {
 	var evt baseEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
@@ -79,8 +56,8 @@ func (s *Subscriber) process(data []byte) error {
 	}
 
 	switch evt.Source {
-	case "cbr":
-		var rates []normalizedCBRRate
+	case string(events.SourceCBR):
+		var rates []events.NormalizedCBRRate
 		if err := json.Unmarshal(evt.Rates, &rates); err != nil {
 			return err
 		}
@@ -100,8 +77,8 @@ func (s *Subscriber) process(data []byte) error {
 		}
 		log.Printf("subscriber: saved %d CBR rates to PostgreSQL", len(dbRates))
 
-	case "binance":
-		var rates []normalizedCryptoRate
+	case string(events.SourceBinance):
+		var rates []events.NormalizedCryptoRate
 		if err := json.Unmarshal(evt.Rates, &rates); err != nil {
 			return err
 		}

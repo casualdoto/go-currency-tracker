@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/casualdoto/go-currency-tracker/microservices/data-collector/internal/producer"
+	"github.com/casualdoto/go-currency-tracker/microservices/shared/events"
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ func TestParseCBRResponse_basic(t *testing.T) {
 		t.Fatalf("expected 2 rates, got %d", len(rates))
 	}
 
-	byCode := make(map[string]rawCBRRate, len(rates))
+	byCode := make(map[string]events.RawCBRRate, len(rates))
 	for _, r := range rates {
 		byCode[r.CharCode] = r
 	}
