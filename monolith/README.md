@@ -114,7 +114,6 @@ The monolith runs as **two independent processes** sharing a single PostgreSQL d
 
 ### General
 
-
 | Method | Path        | Description         |
 | ------ | ----------- | ------------------- |
 | GET    | `/`         | Web interface       |
@@ -122,9 +121,7 @@ The monolith runs as **two independent processes** sharing a single PostgreSQL d
 | GET    | `/info`     | Service information |
 | GET    | `/api/docs` | Swagger UI          |
 
-
 ### CBR Currency Rates
-
 
 | Method | Path                             | Description                                              |
 | ------ | -------------------------------- | -------------------------------------------------------- |
@@ -134,9 +131,7 @@ The monolith runs as **two independent processes** sharing a single PostgreSQL d
 | GET    | `/rates/cbr/history/range`       | Date range (`?code=USD&start_date=&end_date=`)           |
 | GET    | `/rates/cbr/history/range/excel` | Export to Excel                                          |
 
-
 ### Cryptocurrency Rates
-
 
 | Method | Path                                | Description                                      |
 | ------ | ----------------------------------- | ------------------------------------------------ |
@@ -144,7 +139,6 @@ The monolith runs as **two independent processes** sharing a single PostgreSQL d
 | GET    | `/rates/crypto/history`             | Last N days (`?symbol=BTC&days=30`)              |
 | GET    | `/rates/crypto/history/range`       | Date range (`?symbol=BTC&start_date=&end_date=`) |
 | GET    | `/rates/crypto/history/range/excel` | Export to Excel                                  |
-
 
 ## Deployment
 
@@ -199,7 +193,6 @@ go build -o currency-bot.exe ./cmd/bot
 
 ### Environment Variables
 
-
 | Variable             | Default                        | Description                  |
 | -------------------- | ------------------------------ | ---------------------------- |
 | `DB_HOST`            | `localhost`                    | PostgreSQL host              |
@@ -211,18 +204,16 @@ go build -o currency-bot.exe ./cmd/bot
 | `TELEGRAM_BOT_TOKEN` | —                              | Bot token (required for bot) |
 | `CBR_BASE_URL`       | `https://www.cbr-xml-daily.ru` | CBR API base URL             |
 
-
 ## Database Schema
 
 Four tables are created automatically on startup:
 
-- `**currency_rates**` — CBR fiat rates (date, code, nominal, value, previous)
-- `**crypto_rates**` — Binance crypto OHLCV data (timestamp, symbol, open, high, low, close, volume)
-- `**telegram_subscriptions**` — User-to-fiat-currency subscriptions
-- `**telegram_crypto_subscriptions**` — User-to-crypto subscriptions
+- **currency_rates** — CBR fiat rates (date, code, nominal, value, previous)
+- **crypto_rates** — Binance crypto OHLCV data (timestamp, symbol, open, high, low, close, volume)
+- **telegram_subscriptions** — User-to-fiat-currency subscriptions
+- **telegram_crypto_subscriptions** — User-to-crypto subscriptions
 
 ## Telegram Bot Commands
-
 
 | Command                        | Description                     |
 | ------------------------------ | ------------------------------- |
@@ -237,7 +228,6 @@ Four tables are created automatically on startup:
 | `/crypto_unsubscribe [symbol]` | Unsubscribe from crypto         |
 | `/crypto_list`                 | Show your crypto subscriptions  |
 | `/crypto_rate [symbol]`        | Get current crypto/RUB rate     |
-
 
 ## Testing
 
@@ -267,7 +257,6 @@ Integration tests in `internal/storage/` use [TestContainers](https://golang.tes
 
 ## Tech Stack
 
-
 | Component        | Technology                |
 | ---------------- | ------------------------- |
 | Language         | Go 1.23                   |
@@ -279,7 +268,6 @@ Integration tests in `internal/storage/` use [TestContainers](https://golang.tes
 | Env Loading      | godotenv                  |
 | Testing          | testify, TestContainers   |
 | Containerization | Docker multi-stage builds |
-
 
 ## License
 
