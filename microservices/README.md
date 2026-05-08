@@ -135,55 +135,7 @@ microservices/
 
 ## Architecture
 
-### Data Flow (Asynchronous)
-
-```
-  CBR API                 Binance API
-    │                         │
-    └─────────┬───────────────┘
-              ▼
-      data-collector
-              │ publishes
-              ▼
-      [ raw-rates topic ]
-              │
-              ▼
-   normalization-service ─── fetches USD/RUB from CBR
-              │              (crypto/USDT × USD/RUB = crypto/RUB)
-              │ publishes
-              ▼
-   [ normalized-rates topic ]
-         ┌────┴────┐
-         ▼         ▼
-  history-service  notification-service
-   (PG + CH)        (Redis)
-         │              │
-         │         Telegram API
-         │         (push notifications)
-         ▼
-   PostgreSQL      Redis
-   (CBR rates)    (subscriptions)
-   ClickHouse
-   (crypto rates)
-```
-
-### Request Flow (Synchronous)
-
-```
-  Browser           Telegram Bot
-     │                    │
-     ▼                    ▼
-  web-ui:3000     telegram-bot
-     │                    │
-     └──────┬─────────────┘
-            ▼
-     api-gateway:8080
-       ┌────┴────┐
-       ▼         ▼
-  history-    notification-
-  service     service
-  :8084       :8085
-```
+![Microservices Architecture](mermaid/microservices_architecture.png)
 
 ### Kafka Topics
 

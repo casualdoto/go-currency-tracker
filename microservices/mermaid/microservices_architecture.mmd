@@ -1,0 +1,53 @@
+flowchart TB
+    subgraph EXTERNAL["External APIs"]
+        cbr_api["CBR API"]
+        binance_api["Binance API"]
+    end
+
+    data_collector["data-collector"]
+    raw["raw-rates<br/>(Kafka topic)"]
+    norm_svc["normalization-service"]
+    norm["normalized-rates<br/>(Kafka topic)"]
+
+    subgraph APP_SERVICES["Application Services"]
+        direction TB
+        api_gw["api-gateway<br/>:8080"]
+        history_svc["history-service<br/>:8084"]
+        notif_svc["notification-service<br/>:8085"]
+    end
+
+    subgraph CLIENTS["Clients"]
+        browser["Browser"]
+        tg_bot["telegram-bot"]
+    end
+
+    web_ui["web-ui<br/>:3000"]
+
+    subgraph INFRA["Infrastructure"]
+        pg[("PostgreSQL<br/>:5433")]
+        ch[("ClickHouse<br/>:8123")]
+        redis[("Redis<br/>:6379")]
+    end
+
+    tg_api["Telegram API"]
+
+    cbr_api --> data_collector
+    binance_api --> data_collector
+    data_collector --> raw
+    raw --> norm_svc
+    cbr_api -.->|"USD/RUB rate"| norm_svc
+    norm_svc --> norm
+    norm --> history_svc
+    norm --> notif_svc
+
+    history_svc --> pg
+    history_svc --> ch
+    notif_svc --> redis
+    notif_svc --> tg_api
+
+    browser --> web_ui
+    web_ui --> api_gw
+    tg_bot --> api_gw
+    tg_bot --> notif_svc
+    api_gw --> history_svc
+    api_gw --> notif_svc
