@@ -1,0 +1,28 @@
+flowchart TB
+    subgraph SERVER["cmd/server (:8081)"]
+        scheduler["scheduler (23:59 UTC)"]
+        api["api (CBR / Crypto / Web / docs)"]
+    end
+
+    storage["storage/postgres"]
+    cbr["currency/cbr (CBR API)"]
+    binance["currency/binance (Binance API)"]
+    db[("PostgreSQL")]
+
+    subgraph BOT["cmd/bot (Telegram)"]
+        telegram_scheduler["telegram_scheduler (daily + 15min)"]
+        alert["alert/telegram (bot commands)"]
+    end
+
+    scheduler --> cbr
+    scheduler --> storage
+    api --> storage
+    api --> cbr
+    api --> binance
+
+    alert --> storage
+    alert --> cbr
+    alert --> binance
+    telegram_scheduler --> alert
+
+    storage --> db
