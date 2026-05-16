@@ -20,6 +20,7 @@
         const metricVolatility = document.getElementById('metric-volatility');
         const loadingIndicator = document.getElementById('loading-indicator');
         const downloadExcelBtn = document.getElementById('download-excel');
+        const appNotification = document.getElementById('app-notification');
 
         let currentDataSource = 'cbr';
         let currentCurrencyCode = '';
@@ -28,6 +29,19 @@
 
         const ctx = document.getElementById('currency-chart').getContext('2d');
         let currencyChart = null;
+
+        function showNotification(message, type = 'danger') {
+            appNotification.textContent = message;
+            appNotification.className = 'app-notification';
+            if (type !== 'danger') {
+                appNotification.classList.add(type);
+            }
+        }
+
+        function clearNotification() {
+            appNotification.textContent = '';
+            appNotification.className = 'app-notification d-none';
+        }
 
         function startOfLocalDay(d) {
             return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -172,21 +186,22 @@
         function runAnalysis() {
             const currencyVal = currencySelect.value;
             if (!currencyVal) return;
+            clearNotification();
 
             if (periodSelect.value === 'custom') {
                 const startDate = parseISODateInput(startDateInput.value);
                 const endDate = parseISODateInput(endDateInput.value);
                 if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-                    alert('Please enter valid dates');
+                    showNotification('Please enter valid dates.');
                     return;
                 }
                 if (startDate > endDate) {
-                    alert('Start date must be before end date');
+                    showNotification('Start date must be before end date.');
                     return;
                 }
                 const daysDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
                 if (daysDiff > 365) {
-                    alert('Custom period cannot exceed 365 days');
+                    showNotification('Custom period cannot exceed 365 days.');
                     return;
                 }
                 currentCurrencyCode = currentDataSource === 'cbr' ? currencyVal : (currencySelect.selectedOptions[0]?.dataset.base || stripUsdt(currencyVal));
@@ -273,7 +288,7 @@
                 opt.textContent = 'Failed to load currencies';
                 opt.disabled = true;
                 currencySelect.appendChild(opt);
-                alert('Failed to load currencies list. Please try again later.');
+                showNotification('Failed to load currencies list. Please try again later.');
             }
         }
 
@@ -354,7 +369,7 @@
                 }
             } catch (e) {
                 console.error('Error loading crypto symbols:', e);
-                alert('Failed to load crypto symbols. Please try again later.');
+                showNotification('Failed to load crypto symbols. Please try again later.');
             }
         }
 
@@ -507,7 +522,7 @@
                     loadingIndicator.classList.add('d-none');
                     document.getElementById('currency-chart').classList.remove('d-none');
                     downloadExcelBtn.disabled = true;
-                    alert('No data available for the selected period. Try a different period.');
+                    showNotification('No data available for the selected period. Try a different period.', 'warning');
                     resetMetrics();
                     return;
                 }
@@ -545,7 +560,7 @@
                     downloadExcelBtn.disabled = false;
                     if (nominalChanges.changed) {
                         const warningDates = nominalChanges.dates.map((d) => d.date).join(', ');
-                        alert(
+                        showNotification(
                             `Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`
                         );
                     }
@@ -556,7 +571,7 @@
                 document.getElementById('currency-chart').classList.remove('d-none');
                 downloadExcelBtn.disabled = true;
                 console.error('Error loading historical data:', e);
-                alert('Failed to load historical data. Please try again later.');
+                showNotification('Historical data service is temporarily unavailable. Please try again later.');
                 resetMetrics();
             }
         }
@@ -594,7 +609,7 @@
                     loadingIndicator.classList.add('d-none');
                     document.getElementById('currency-chart').classList.remove('d-none');
                     downloadExcelBtn.disabled = true;
-                    alert('No data available for the selected date range. Try a different period.');
+                    showNotification('No data available for the selected date range. Try a different period.', 'warning');
                     resetMetrics();
                     return;
                 }
@@ -632,7 +647,7 @@
                     downloadExcelBtn.disabled = false;
                     if (nominalChanges.changed) {
                         const warningDates = nominalChanges.dates.map((d) => d.date).join(', ');
-                        alert(
+                        showNotification(
                             `Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`
                         );
                     }
@@ -643,7 +658,7 @@
                 document.getElementById('currency-chart').classList.remove('d-none');
                 downloadExcelBtn.disabled = true;
                 console.error('Error loading historical data:', e);
-                alert('Failed to load historical data. Please try again later.');
+                showNotification('Historical data service is temporarily unavailable. Please try again later.');
                 resetMetrics();
             }
         }
@@ -690,7 +705,7 @@
                     loadingIndicator.classList.add('d-none');
                     document.getElementById('currency-chart').classList.remove('d-none');
                     downloadExcelBtn.disabled = true;
-                    alert(`No crypto data available for ${apiSymbol} for the selected period.`);
+                    showNotification(`No crypto data available for ${apiSymbol} for the selected period.`, 'warning');
                     resetMetrics();
                     return;
                 }
@@ -733,7 +748,7 @@
                 document.getElementById('currency-chart').classList.remove('d-none');
                 downloadExcelBtn.disabled = true;
                 console.error('Error loading crypto historical data:', e);
-                alert(`Failed to load crypto historical data for ${apiSymbol}.`);
+                showNotification('Historical data service is temporarily unavailable. Please try again later.');
                 resetMetrics();
             }
         }
@@ -770,7 +785,7 @@
                     loadingIndicator.classList.add('d-none');
                     document.getElementById('currency-chart').classList.remove('d-none');
                     downloadExcelBtn.disabled = true;
-                    alert(`No crypto data available for ${apiSymbol} for the selected date range.`);
+                    showNotification(`No crypto data available for ${apiSymbol} for the selected date range.`, 'warning');
                     resetMetrics();
                     return;
                 }
@@ -813,7 +828,7 @@
                 document.getElementById('currency-chart').classList.remove('d-none');
                 downloadExcelBtn.disabled = true;
                 console.error('Error loading crypto historical data:', e);
-                alert(`Failed to load crypto historical data for ${apiSymbol}.`);
+                showNotification('Historical data service is temporarily unavailable. Please try again later.');
                 resetMetrics();
             }
         }

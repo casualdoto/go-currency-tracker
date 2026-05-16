@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const metricVolatility = document.getElementById('metric-volatility');
     const loadingIndicator = document.getElementById('loading-indicator');
     const downloadExcelBtn = document.getElementById('download-excel');
+    const appNotification = document.getElementById('app-notification');
     
     // Variables to store current analysis parameters
     let currentDataSource = 'cbr';
@@ -24,6 +25,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Chart context
     const ctx = document.getElementById('currency-chart').getContext('2d');
     let currencyChart = null;
+
+    function showNotification(message, type = 'danger') {
+        appNotification.textContent = message;
+        appNotification.className = 'app-notification';
+        if (type !== 'danger') {
+            appNotification.classList.add(type);
+        }
+    }
+
+    function clearNotification() {
+        appNotification.textContent = '';
+        appNotification.className = 'app-notification d-none';
+    }
     
     // Initialize date inputs with reasonable defaults
     const today = new Date();
@@ -132,6 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
     currencyForm.addEventListener('submit', function(e) {
         e.preventDefault();
         const currencyCode = currencySelect.value;
+        clearNotification();
         
         if (currencyCode) {
             if (periodSelect.value === 'custom') {
@@ -141,12 +156,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Validate dates
                 if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-                    alert('Please enter valid dates');
+                    showNotification('Please enter valid dates.');
                     return;
                 }
                 
                 if (startDate > endDate) {
-                    alert('Start date must be before end date');
+                    showNotification('Start date must be before end date.');
                     return;
                 }
                 
@@ -155,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Limit to 365 days
                 if (daysDiff > 365) {
-                    alert('Custom period cannot exceed 365 days');
+                    showNotification('Custom period cannot exceed 365 days.');
                     return;
                 }
                 
@@ -260,7 +275,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('Error loading currencies list:', error);
-            alert('Failed to load currencies list. Please try again later.');
+            showNotification('Failed to load currencies list. Please try again later.');
         }
     }
     
@@ -322,7 +337,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadCryptoHistory('BTC', 7);
         } catch (error) {
             console.error('Error loading crypto symbols:', error);
-            alert('Failed to load crypto symbols. Please try again later.');
+            showNotification('Failed to load crypto symbols. Please try again later.');
         }
     }
     
@@ -543,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Show warning if nominal changed
                     if (nominalChanges.changed) {
                         const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
-                        alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
+                        showNotification(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`, 'warning');
                     }
                 }, 500);
                 
@@ -561,7 +576,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 loadCurrencyHistoryInProgress = false;
                 loadCurrencyHistoryLastParams = null;
-                alert('No data available for the selected period. Try a different period.');
+                showNotification('No data available for the selected period. Try a different period.', 'warning');
                 resetMetrics();
             }
         } catch (error) {
@@ -575,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadCurrencyHistoryInProgress = false;
             loadCurrencyHistoryLastParams = null;
             console.error('Error loading historical data:', error);
-            alert('Failed to load historical data. Please try again later.');
+            showNotification('Historical data service is temporarily unavailable. Please try again later.');
             resetMetrics();
         }
     }
@@ -692,7 +707,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Show warning if nominal changed
                     if (nominalChanges.changed) {
                         const warningDates = nominalChanges.dates.map(d => d.date).join(', ');
-                        alert(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`);
+                        showNotification(`Note: The nominal value for ${currencyCode} changed on the following dates: ${warningDates}. The chart has been normalized to ensure accurate comparison.`, 'warning');
                     }
                 }, 500);
                 
@@ -710,7 +725,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 loadCurrencyHistoryCustomInProgress = false;
                 loadCurrencyHistoryCustomLastParams = null;
-                alert('No data available for the selected date range. Try a different period.');
+                showNotification('No data available for the selected date range. Try a different period.', 'warning');
                 resetMetrics();
             }
         } catch (error) {
@@ -724,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadCurrencyHistoryCustomInProgress = false;
             loadCurrencyHistoryCustomLastParams = null;
             console.error('Error loading historical data:', error);
-            alert('Failed to load historical data. Please try again later.');
+            showNotification('Historical data service is temporarily unavailable. Please try again later.');
             resetMetrics();
         }
     }
@@ -808,7 +823,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 downloadExcelBtn.disabled = true;
                 
                 console.log('No crypto data available:', data);
-                alert(`No crypto data available for ${symbol} for the selected period. Error: ${data.error || 'Unknown error'}`);
+                showNotification(`No crypto data available for ${symbol} for the selected period.`, 'warning');
                 resetMetrics();
             }
         } catch (error) {
@@ -820,7 +835,7 @@ document.addEventListener('DOMContentLoaded', function() {
             downloadExcelBtn.disabled = true;
             
             console.error('Error loading crypto historical data:', error);
-            alert(`Failed to load crypto historical data for ${symbol}. Error: ${error.message}`);
+            showNotification('Historical data service is temporarily unavailable. Please try again later.');
             resetMetrics();
         }
     }
@@ -904,7 +919,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 downloadExcelBtn.disabled = true;
                 
                 console.log('No crypto data available for date range:', data);
-                alert(`No crypto data available for ${symbol} for the selected date range. Error: ${data.error || 'Unknown error'}`);
+                showNotification(`No crypto data available for ${symbol} for the selected date range.`, 'warning');
                 resetMetrics();
             }
         } catch (error) {
@@ -916,7 +931,7 @@ document.addEventListener('DOMContentLoaded', function() {
             downloadExcelBtn.disabled = true;
             
             console.error('Error loading crypto historical data for date range:', error);
-            alert(`Failed to load crypto historical data for ${symbol} date range. Error: ${error.message}`);
+            showNotification('Historical data service is temporarily unavailable. Please try again later.');
             resetMetrics();
         }
     }

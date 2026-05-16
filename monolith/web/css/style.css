@@ -28,6 +28,28 @@
     background-color: #f1f5f9;
 }
 
+.app-notification {
+    border-left: 5px solid #dc3545;
+    border-radius: 6px;
+    background-color: #f8d7da;
+    color: #842029;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.app-notification.warning {
+    border-left-color: #ffc107;
+    background-color: #fff3cd;
+    color: #664d03;
+}
+
+.app-notification.success {
+    border-left-color: #198754;
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
 #currency-chart {
     min-height: 300px;
 }

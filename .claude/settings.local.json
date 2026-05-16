@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc --track-changes=all \"C:/Users/hrest/Desktop/НИР/Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" -o /tmp/report.md)",
+      "Read(//tmp/**)",
+      "PowerShell(pandoc --track-changes=all \"C:\\\\Users\\\\hrest\\\\Desktop\\\\НИР\\\\Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" -o \"$env:TEMP\\\\report.md\"; if \\($?\\) { Get-Item \"$env:TEMP\\\\report.md\" | Select-Object Length })",
+      "Bash(python \"C:/Users/hrest/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/78dcc6f5-032f-4adc-8cc9-d5c18bc5b440/b414b4f9-3213-4e83-9711-ba095dd6c7b9/skills/docx/scripts/office/unpack.py\" \"C:/Users/hrest/Desktop/НИР/Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" /tmp/unpacked/)",
+      "Bash(py --version)",
+      "Bash(py -c ' *)",
+      "Bash(grep -cE \"^\\\\s+[a-z-]+:$\" microservices/docker-compose.yml)",
+      "Bash(pandoc --track-changes=all \"C:/Users/hrest/Desktop/НИР/Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" -o /tmp/nir_report.md)",
+      "PowerShell(pandoc --track-changes=all \"C:\\\\Users\\\\hrest\\\\Desktop\\\\НИР\\\\Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" -o \"$env:TEMP\\\\nir_report.md\"; if \\($?\\) { \\(Get-Item \"$env:TEMP\\\\nir_report.md\"\\).Length })",
+      "Read(//c/Users/hrest/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/78dcc6f5-032f-4adc-8cc9-d5c18bc5b440/b414b4f9-3213-4e83-9711-ba095dd6c7b9/skills/docx/**)",
+      "Bash(python scripts/office/unpack.py \"C:/Users/hrest/Desktop/НИР/Отчет_НИР_весна_Хрестьяновский_Даниил_Дмитриевич_4_курс_1_глава — копия.docx\" /tmp/nir_unpacked)",
+      "Bash(cygpath -w /tmp/nir_unpacked)",
+      "Bash(grep -n \"func Test\\\\|func Benchmark\\\\|build.*e2e\\\\|build.*integration\\\\|build.*load\\\\|//go:build\" microservices/tests/e2e/e2e_test.go microservices/tests/load/load_test.go microservices/api-gateway/internal/gateway/integration_test.go microservices/history-service/internal/handler/integration_test.go)",
+      "Bash(grep -n \"//go:build\\\\|GenerateCBRRates\\\\|generate.*Crypto\\\\|trackedSymbols\\\\|Symbol\\\\\\(\" microservices/tests/load/load_test.go)",
+      "Bash(grep -nE \"//go:build|trackedSymbols|len.*rates|34|20|cbrCount|cryptoCount\" microservices/tests/load/load_test.go)",
+      "Bash(grep -nE \"//go:build|RunParallel|b.RunParallel|SetParallelism|goroutines\" microservices/tests/load/load_test.go)",
+      "Bash(go work *)",
+      "Bash(go mod *)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(docker build *)",
+      "Bash(docker rmi *)",
+      "Bash(grep -E \"^  [a-z-]+:$\" microservices/docker-compose.yml)",
+      "Bash(python make_bench_xlsx.py)",
+      "Bash(python \"C:/Users/hrest/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/78dcc6f5-032f-4adc-8cc9-d5c18bc5b440/b414b4f9-3213-4e83-9711-ba095dd6c7b9/skills/xlsx/scripts/recalc.py\" \"E:/VSCode Projects/go-currency-tracker/load_test_results.xlsx\" 60)",
+      "Bash(curl -sI https://github.com/adshao/go-binance)",
+      "Bash(curl -sI https://github.com/adshao/go-binance/v2)"
+    ]
+  }
+}

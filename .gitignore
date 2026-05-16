@@ -31,5 +31,4 @@ go.work.sum
 # .idea/
 # .vscode/
 .cursor/
-.claude/
-CLAUDE.md
+AGENTS.md
